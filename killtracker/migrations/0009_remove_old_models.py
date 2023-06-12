@@ -4,7 +4,6 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("killtracker", "0008_copy_data_to_new_structure"),
     ]

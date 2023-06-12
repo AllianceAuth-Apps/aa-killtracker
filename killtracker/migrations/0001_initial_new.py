@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     replaces = [
         ("killtracker", "0001_squashed_all"),
         ("killtracker", "0002_fix_webhook_notes_field"),

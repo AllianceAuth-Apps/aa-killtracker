@@ -577,7 +577,6 @@ class Webhook(models.Model):
 
 
 class Tracker(models.Model):
-
     MAIN_MINIMUM_COUNT = 2
     MAIN_MINIMUM_SHARE = 0.25
 
