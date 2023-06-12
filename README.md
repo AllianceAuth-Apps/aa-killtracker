@@ -1,6 +1,6 @@
 # killtracker
 
-An app for running killmail trackers with Alliance Auth and Discord
+An app for running killmail trackers with Alliance Auth and Discord.
 
 [![release](https://img.shields.io/pypi/v/aa-killtracker?label=release)](https://pypi.org/project/aa-killtracker/)
 [![python](https://img.shields.io/pypi/pyversions/aa-killtracker)](https://pypi.org/project/aa-killtracker/)
