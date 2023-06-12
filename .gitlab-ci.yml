@@ -37,22 +37,22 @@ pre-commit-check:
   needs: []
   image: python:3.10-bullseye
 
-test-38-django32:
+test-38-django40:
   extends: .test-py38
   script:
-  - tox -e py38-django32
+  - tox -e py38-django40
   - bash <(curl -s https://codecov.io/bash)
 
-test-39-django32:
+test-39-django40:
   extends: .test-py39
   script:
-  - tox -e py39-django32
+  - tox -e py39-django40
   - bash <(curl -s https://codecov.io/bash)
 
-test-310-django32:
+test-310-django40:
   extends: .test-py310
   script:
-  - tox -e py310-django32
+  - tox -e py310-django40
   - bash <(curl -s https://codecov.io/bash)
 
 deploy-pypi:
