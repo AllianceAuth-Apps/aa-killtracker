@@ -1,3 +1,5 @@
+""""An app for running killmail trackers with Alliance Auth and Discord."""
+
 default_app_config = "killtracker.apps.KillmailsConfig"
 
 __version__ = "0.10.0a1"
