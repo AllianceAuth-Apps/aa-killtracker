@@ -964,7 +964,10 @@ class Tracker(models.Model):
                 distance = meters_to_ly(
                     self.origin_solar_system.distance_to(solar_system)
                 )
-                jumps = self.origin_solar_system.jumps_to(solar_system)
+                try:
+                    jumps = self.origin_solar_system.jumps_to(solar_system)
+                except OSError:
+                    jumps = None
 
         # Make sure all ship types are in the local database
         if self.has_type_clause:

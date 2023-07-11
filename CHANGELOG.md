@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Migrate to PEP 621 build process
 - Added support for Python 3.11
 
+### Fixed
+
+- Processing of killmail fails when ESI route endpoints returns error
+
 ## [0.9.2] - 2022-10-17
 
 >**Update notes**: If you are upgrading from a version prior to 0.8.x, you please need to upgrade to 0.8.1 first to avoid any migration issues.
