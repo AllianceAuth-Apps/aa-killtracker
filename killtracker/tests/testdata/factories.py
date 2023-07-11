@@ -1,4 +1,5 @@
 import datetime as dt
+from typing import Generic, TypeVar
 
 import factory
 import factory.fuzzy
@@ -18,10 +19,18 @@ from killtracker.models import Tracker, Webhook
 
 from .load_eveuniverse import eveuniverse_testdata
 
+T = TypeVar("T")
 _SOLAR_SYSTEM_IDS = {obj["id"] for obj in eveuniverse_testdata["EveSolarSystem"]}
 
 
-class KillmailCharacterFactory(factory.Factory):
+class BaseMetaFactory(Generic[T], factory.base.FactoryMetaClass):
+    def __call__(cls, *args, **kwargs) -> T:
+        return super().__call__(*args, **kwargs)
+
+
+class KillmailCharacterFactory(
+    factory.Factory, metaclass=BaseMetaFactory[_KillmailCharacter]
+):
     class Meta:
         model = _KillmailCharacter
 
@@ -31,14 +40,18 @@ class KillmailCharacterFactory(factory.Factory):
     ship_type_id = 3756  # Gnosis
 
 
-class KillmailVictimFactory(KillmailCharacterFactory):
+class KillmailVictimFactory(
+    KillmailCharacterFactory, metaclass=BaseMetaFactory[KillmailVictim]
+):
     class Meta:
         model = KillmailVictim
 
     damage_taken = factory.fuzzy.FuzzyInteger(1_000_000)
 
 
-class KillmailAttackerFactory(KillmailCharacterFactory):
+class KillmailAttackerFactory(
+    KillmailCharacterFactory, metaclass=BaseMetaFactory[KillmailAttacker]
+):
     class Meta:
         model = KillmailAttacker
 
@@ -47,7 +60,9 @@ class KillmailAttackerFactory(KillmailCharacterFactory):
     weapon_type_id = 2977
 
 
-class KillmailPositionFactory(factory.Factory):
+class KillmailPositionFactory(
+    factory.Factory, metaclass=BaseMetaFactory[KillmailPosition]
+):
     class Meta:
         model = KillmailPosition
 
@@ -56,7 +71,7 @@ class KillmailPositionFactory(factory.Factory):
     z = factory.fuzzy.FuzzyFloat(-10_000, 10_000)
 
 
-class KillmailZkbFactory(factory.Factory):
+class KillmailZkbFactory(factory.Factory, metaclass=BaseMetaFactory[KillmailZkb]):
     class Meta:
         model = KillmailZkb
 
@@ -70,7 +85,7 @@ class KillmailZkbFactory(factory.Factory):
     is_awox = False
 
 
-class KillmailFactory(factory.Factory):
+class KillmailFactory(factory.Factory, metaclass=BaseMetaFactory[Killmail]):
     class Meta:
         model = Killmail
 
@@ -98,7 +113,9 @@ class KillmailFactory(factory.Factory):
         return my_attackers
 
 
-class WebhookFactory(factory.django.DjangoModelFactory):
+class WebhookFactory(
+    factory.django.DjangoModelFactory, metaclass=BaseMetaFactory[Webhook]
+):
     class Meta:
         model = Webhook
         django_get_or_create = ("name",)
@@ -107,7 +124,9 @@ class WebhookFactory(factory.django.DjangoModelFactory):
     url = factory.Faker("uri")
 
 
-class TrackerFactory(factory.django.DjangoModelFactory):
+class TrackerFactory(
+    factory.django.DjangoModelFactory, metaclass=BaseMetaFactory[Tracker]
+):
     class Meta:
         model = Tracker
         django_get_or_create = ("name",)
