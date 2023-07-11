@@ -967,6 +967,8 @@ class Tracker(models.Model):
                 try:
                     jumps = self.origin_solar_system.jumps_to(solar_system)
                 except OSError:
+                    # Currently all those exceptions are already captures in eveuniverse,
+                    # but this shall remain for when the workaround is fixed
                     jumps = None
 
         # Make sure all ship types are in the local database
