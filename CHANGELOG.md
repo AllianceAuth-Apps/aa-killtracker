@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Migrate to PEP 621 build process
 - Added support for Python 3.11
 - Removed local swagger spec file
+- Updated dependencies
 
 ### Fixed
 
