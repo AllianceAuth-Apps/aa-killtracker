@@ -577,7 +577,6 @@ class Webhook(models.Model):
 
 
 class Tracker(models.Model):
-
     MAIN_MINIMUM_COUNT = 2
     MAIN_MINIMUM_SHARE = 0.25
 
@@ -965,7 +964,12 @@ class Tracker(models.Model):
                 distance = meters_to_ly(
                     self.origin_solar_system.distance_to(solar_system)
                 )
-                jumps = self.origin_solar_system.jumps_to(solar_system)
+                try:
+                    jumps = self.origin_solar_system.jumps_to(solar_system)
+                except OSError:
+                    # Currently all those exceptions are already captures in eveuniverse,
+                    # but this shall remain for when the workaround is fixed
+                    jumps = None
 
         # Make sure all ship types are in the local database
         if self.has_type_clause:

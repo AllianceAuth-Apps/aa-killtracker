@@ -65,7 +65,6 @@ def copy_killmails(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("killtracker", "0007_restructure_killsmails"),
     ]

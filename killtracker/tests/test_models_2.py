@@ -526,16 +526,14 @@ class TestTrackerCalculate2(LoadTestDataMixin, NoSocketsTestCase):
         self.assertIsNone(result)
 
 
+@patch(MODULE_PATH + ".EveSolarSystem.jumps_to")
 class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
     def setUp(self) -> None:
         self.tracker = TrackerFactory(webhook=self.webhook_1)
 
-    @patch("eveuniverse.models.esi")
-    def test_basics(self, mock_esi):
+    def test_basics(self, mock_jumps_to):
         # given
-        mock_esi.client.Routes.get_route_origin_destination.side_effect = (
-            esi_get_route_origin_destination
-        )
+        mock_jumps_to.return_value = 7
         self.tracker.origin_solar_system_id = 30003067
         self.tracker.save()
         # when
@@ -559,29 +557,29 @@ class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
             ),
         )
 
-    def test_main_org_corporation_is_main(self):
+    def test_main_org_corporation_is_main(self, mock_jumps_to):
         killmail = self.tracker.process_killmail(load_killmail(10000403))
         self.assertEqual(
             killmail.tracker_info.main_org,
             EntityCount(id=2001, category=EntityCount.CATEGORY_CORPORATION, count=2),
         )
 
-    def test_main_org_prioritize_alliance_over_corporation(self):
+    def test_main_org_prioritize_alliance_over_corporation(self, mock_jumps_to):
         killmail = self.tracker.process_killmail(load_killmail(10000401))
         self.assertEqual(
             killmail.tracker_info.main_org,
             EntityCount(id=3001, category=EntityCount.CATEGORY_ALLIANCE, count=2),
         )
 
-    def test_main_org_is_none_if_only_one_attacker(self):
+    def test_main_org_is_none_if_only_one_attacker(self, mock_jumps_to):
         killmail = self.tracker.process_killmail(load_killmail(10000005))
         self.assertIsNone(killmail.tracker_info.main_org)
 
-    def test_main_org_is_none_if_faction(self):
+    def test_main_org_is_none_if_faction(self, mock_jumps_to):
         killmail = self.tracker.process_killmail(load_killmail(10000302))
         self.assertIsNone(killmail.tracker_info.main_org)
 
-    def test_main_ship_group_above_threshold(self):
+    def test_main_ship_group_above_threshold(self, mock_jumps_to):
         killmail = self.tracker.process_killmail(load_killmail(10006001))
         self.assertEqual(
             killmail.tracker_info.main_ship_group,
@@ -590,20 +588,32 @@ class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
             ),
         )
 
-    def test_main_ship_group_return_none_if_below_threshold(self):
+    def test_main_ship_group_return_none_if_below_threshold(self, mock_jumps_to):
         killmail = self.tracker.process_killmail(load_killmail(10006002))
         self.assertIsNone(killmail.tracker_info.main_ship_group)
 
-    def test_main_org_above_threshold(self):
+    def test_main_org_above_threshold(self, mock_jumps_to):
         killmail = self.tracker.process_killmail(load_killmail(10006003))
         self.assertEqual(
             killmail.tracker_info.main_org,
             EntityCount(id=2001, category="corporation", count=2),
         )
 
-    def test_main_org_return_none_if_below_threshold(self):
+    def test_main_org_return_none_if_below_threshold(self, mock_jumps_to):
         killmail = self.tracker.process_killmail(load_killmail(10006004))
         self.assertIsNone(killmail.tracker_info.main_org)
+
+    def test_should_ignore_os_error_esi_route_endpoint(self, mock_jumps_to):
+        # given
+        mock_jumps_to.side_effect = OSError
+        self.tracker.origin_solar_system_id = 30003067
+        self.tracker.save()
+        # when
+        killmail = self.tracker.process_killmail(load_killmail(10000101))
+        # then
+        self.assertTrue(killmail.tracker_info)
+        self.assertEqual(killmail.tracker_info.tracker_pk, self.tracker.pk)
+        self.assertIsNone(killmail.tracker_info.jumps)
 
 
 class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):

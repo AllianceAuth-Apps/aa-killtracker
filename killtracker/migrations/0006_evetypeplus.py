@@ -4,7 +4,6 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("eveuniverse", "0007_evetype_description"),
         ("killtracker", "0005_add_final_blow_clause_and_more"),

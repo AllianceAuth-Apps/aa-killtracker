@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [0.10.0] - 2023-07-11
+
+### Changed
+
+- Migrated to AA3 (incl. dropping support for AA2)
+- Migrate to PEP 621 build process
+- Added support for Python 3.11
+- Removed local swagger spec file
+- Updated dependencies
+
+### Fixed
+
+- Processing of killmail fails when ESI route endpoints returns error
+
 ## [0.9.2] - 2022-10-17
 
 >**Update notes**: If you are upgrading from a version prior to 0.8.x, you please need to upgrade to 0.8.1 first to avoid any migration issues.

@@ -94,7 +94,6 @@ class KillmailZkb(_KillmailBase):
 
 @dataclass(eq=True, frozen=True)
 class EntityCount:
-
     CATEGORY_ALLIANCE = "alliance"
     CATEGORY_CORPORATION = "corporation"
     CATEGORY_INVENTORY_GROUP = "inventory_group"
