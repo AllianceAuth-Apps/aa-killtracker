@@ -637,36 +637,6 @@ class Tracker(models.Model):
         if not ignore_max_age and killmail.time < threshold_date:
             return None
 
-        # pre-calculate shared information
-        solar_system = None
-        distance = None
-        jumps = None
-        is_high_sec = None
-        is_low_sec = None
-        is_null_sec = None
-        is_w_space = None
-        matching_ship_type_ids = None
-        if killmail.solar_system_id and (
-            self.origin_solar_system or self.has_localization_clause
-        ):
-            solar_system, _ = EveSolarSystem.objects.get_or_create_esi(
-                id=killmail.solar_system_id
-            )
-            is_high_sec = solar_system.is_high_sec
-            is_low_sec = solar_system.is_low_sec
-            is_null_sec = solar_system.is_null_sec
-            is_w_space = solar_system.is_w_space
-            if self.origin_solar_system:
-                distance = meters_to_ly(
-                    self.origin_solar_system.distance_to(solar_system)
-                )
-                try:
-                    jumps = self.origin_solar_system.jumps_to(solar_system)
-                except OSError:
-                    # Currently all those exceptions are already captures in eveuniverse,
-                    # but this shall remain for when the workaround is fixed
-                    jumps = None
-
         # Make sure all ship types are in the local database
         if self.has_type_clause:
             EveType.objects.bulk_get_or_create_esi(
@@ -675,6 +645,9 @@ class Tracker(models.Model):
 
         # apply filters
         is_matching = True
+        distance = None
+        jumps = None
+        matching_ship_type_ids = None
         try:
             if is_matching and self.exclude_npc_kills:
                 is_matching = not killmail.zkb.is_npc
@@ -688,16 +661,7 @@ class Tracker(models.Model):
                     and killmail.zkb.total_value >= self.require_min_value * 1_000_000
                 )
 
-            is_matching = self._match_geography(
-                solar_system,
-                distance,
-                jumps,
-                is_matching,
-                is_high_sec,
-                is_low_sec,
-                is_null_sec,
-                is_w_space,
-            )
+            is_matching, jumps, distance = self._match_geography(killmail, is_matching)
 
             is_matching = self._match_attackers(killmail, is_matching)
 
@@ -727,28 +691,41 @@ class Tracker(models.Model):
             return killmail_new
         return None
 
-    def _match_geography(
-        self,
-        solar_system,
-        distance,
-        jumps,
-        is_matching,
-        is_high_sec,
-        is_low_sec,
-        is_null_sec,
-        is_w_space,
-    ):
+    def _match_geography(self, killmail, is_matching):
+        if (
+            not killmail.solar_system_id
+            or not self.origin_solar_system
+            and not self.has_localization_clause
+        ):
+            return is_matching, None, None
+
+        solar_system, _ = EveSolarSystem.objects.get_or_create_esi(
+            id=killmail.solar_system_id
+        )
+
+        if self.origin_solar_system:
+            distance = meters_to_ly(self.origin_solar_system.distance_to(solar_system))
+            try:
+                jumps = self.origin_solar_system.jumps_to(solar_system)
+            except OSError:
+                # Currently all those exceptions are already captures in eveuniverse,
+                # but this shall remain for when the workaround is fixed
+                jumps = None
+        else:
+            jumps = None
+            distance = None
+
         if is_matching and self.exclude_high_sec:
-            is_matching = not is_high_sec
+            is_matching = not solar_system.is_high_sec
 
         if is_matching and self.exclude_low_sec:
-            is_matching = not is_low_sec
+            is_matching = not solar_system.is_low_sec
 
         if is_matching and self.exclude_null_sec:
-            is_matching = not is_null_sec
+            is_matching = not solar_system.is_null_sec
 
         if is_matching and self.exclude_w_space:
-            is_matching = not is_w_space
+            is_matching = not solar_system.is_w_space
 
         if is_matching and self.require_max_distance:
             is_matching = distance is not None and (
@@ -780,7 +757,7 @@ class Tracker(models.Model):
                 and self.require_solar_systems.filter(id=solar_system.id).exists()
             )
 
-        return is_matching
+        return is_matching, jumps, distance
 
     def _match_attackers(self, killmail, is_matching):
         if is_matching and self.require_min_attackers:
