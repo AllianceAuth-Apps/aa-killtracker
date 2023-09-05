@@ -4,10 +4,10 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "aa-killtracker"
-authors = [{name = "Erik Kalkoken", email = "kalkoken87@gmail.com"}]
+authors = [{ name = "Erik Kalkoken", email = "kalkoken87@gmail.com" }]
 readme = "README.md"
 dynamic = ["version", "description"]
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 requires-python = ">=3.8"
 classifiers = [
     "Environment :: Web Environment",
@@ -50,19 +50,25 @@ sections = [
     "DJANGO",
     "ALLIANCEAUTH",
     "FIRSTPARTY",
-    "LOCALFOLDER"
+    "LOCALFOLDER",
 ]
 known_allianceauth = ["allianceauth", "app_utils"]
 known_django = ["django", "django_webtest", "esi", "eveuniverse"]
 
 [tool.pylint.'MASTER']
-ignore-patterns = ["test_.*.py,__init__.py", "generate_.*.py"]
+ignore-patterns = ["__init__.py", "auth_hooks.py", "apps.py"]
+ignore-paths = ["^.*/tests/.*$", "^.*/migrations/.*$"]
 
 [tool.pylint.'BASIC']
-good-names = ["i", "j", "k", "x", "f", "ex"]
+good-names = ["i", "j", "k", "ex"]
 
 [tool.pylint.'FORMAT']
-max-line-length = 100
+max-line-length = 120
 
 [tool.pylint.'MESSAGES CONTROL']
-disable = ["R", "C"]
+disable = [
+    "cyclic-import",
+    "fixme",
+    "too-many-arguments",
+    "too-few-public-methods",
+]
