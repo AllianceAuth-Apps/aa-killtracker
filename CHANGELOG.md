@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Added pylint checks
 - Refactor to fix pylint issues
+- Refactor to fix type issues
 
 ## [0.10.0] - 2023-07-11
 

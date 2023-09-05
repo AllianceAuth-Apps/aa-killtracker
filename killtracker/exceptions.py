@@ -1,5 +1,7 @@
 """Custom exceptions for killtracker."""
 
+from typing import Optional
+
 
 class KilltrackerException(Exception):
     """Exception from Killtracker"""
@@ -10,7 +12,7 @@ class WebhookTooManyRequests(KilltrackerException):
 
     DEFAULT_RESET_AFTER = 600
 
-    def __init__(self, retry_after: int = None) -> None:
+    def __init__(self, retry_after: Optional[int] = None) -> None:
         """
         Parameters:
         - retry_after: time in seconds until this blockage will be reset
