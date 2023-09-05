@@ -64,11 +64,11 @@ class _EveKillmailCharacter(models.Model):
     def entity_ids(self) -> Set[int]:
         """IDs of all entity objects."""
         ids = {
-            self.character_id,
-            self.corporation_id,
-            self.alliance_id,
-            self.faction_id,
-            self.ship_type_id,
+            self.character_id,  # type: ignore
+            self.corporation_id,  # type: ignore
+            self.alliance_id,  # type: ignore
+            self.faction_id,  # type: ignore
+            self.ship_type_id,  # type: ignore
         }
         ids.discard(None)
         return ids
@@ -113,12 +113,12 @@ class EveKillmail(_EveKillmailCharacter):
     def load_entities(self):
         """loads unknown entities for this killmail"""
         qs = EveEntity.objects.filter(id__in=self.entity_ids(), name="")
-        qs.update_from_esi()
+        qs.update_from_esi()  # type: ignore
 
     def entity_ids(self) -> Set[int]:
         """IDs of all entity objects."""
-        ids = super().entity_ids() | {self.solar_system_id}
-        for attacker in self.attackers.all():
+        ids = super().entity_ids() | {self.solar_system_id}  # type: ignore
+        for attacker in self.attackers.all():  # type: ignore
             ids |= attacker.entity_ids()
         ids.discard(None)
         return ids
@@ -157,6 +157,8 @@ class EveKillmailAttacker(_EveKillmailCharacter):
 
     def entity_ids(self) -> Set[int]:
         """IDs of all entity objects."""
-        ids = super().entity_ids() | {self.weapon_type.id}
-        ids.discard(None)
+        ids = super().entity_ids()
+        if self.weapon_type:
+            ids.add(self.weapon_type.id)
+        ids.discard(None)  # type: ignore
         return ids
