@@ -1,5 +1,7 @@
 """Managers for killtracker."""
 
+# pylint: disable = missing-class-docstring
+
 from datetime import timedelta
 from typing import Dict, Tuple
 
@@ -20,6 +22,7 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 class EveTypePlusManager(models.Manager):
     def get_queryset(self):
+        """Add join with EveGroup to default queryset."""
         qs = super().get_queryset()
         return qs.select_related("eve_group")
 
@@ -44,6 +47,7 @@ class EveKillmailBaseManager(models.Manager):
         if KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS > 0:
             deadline = now() - timedelta(days=KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS)
             return self.filter(time__lt=deadline).delete()
+        return None
 
     def create_from_killmail(
         self, killmail: Killmail, resolve_ids=True
@@ -95,7 +99,7 @@ class EveKillmailBaseManager(models.Manager):
 
     @staticmethod
     def _create_args_for_entities(killmail_character: _KillmailCharacter) -> dict:
-        args = dict()
+        args = {}
         for prop_name in killmail_character.ENTITY_PROPS:
             entity_id = getattr(killmail_character, prop_name)
             if entity_id:

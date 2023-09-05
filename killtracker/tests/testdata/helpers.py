@@ -23,7 +23,7 @@ def _load_json_from_file(filename: str) -> dict:
 
 
 def _load_killmails_data() -> dict:
-    data = dict()
+    data = {}
     for obj in _load_json_from_file("killmails"):
         killmail_id = obj["killID"]
         obj["killmail"]["killmail_id"] = killmail_id

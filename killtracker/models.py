@@ -502,7 +502,7 @@ class Webhook(models.Model):
         else:
             embeds_list = None
 
-        message = dict()
+        message = {}
         if content:
             message["content"] = content
         if embeds_list:
@@ -1244,7 +1244,7 @@ class Tracker(models.Model):
         ship_types = EveType.objects.filter(id__in=ships_type_ids).select_related(
             "eve_group"
         )
-        ship_groups = list()
+        ship_groups = []
         for ships_type_id in ships_type_ids:
             try:
                 ship_type = ship_types.get(id=ships_type_id)

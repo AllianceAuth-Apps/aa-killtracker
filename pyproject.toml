@@ -71,4 +71,5 @@ disable = [
     "fixme",
     "too-many-arguments",
     "too-few-public-methods",
+    "import-outside-toplevel",
 ]

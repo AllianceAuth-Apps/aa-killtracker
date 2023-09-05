@@ -369,11 +369,11 @@ class Killmail(_KillmailBase):
         if "killmail" in package_data:
             victim = KillmailVictim()
             position = KillmailPosition()
-            attackers = list()
+            attackers = []
             killmail_data = package_data["killmail"]
             if "victim" in killmail_data:
                 victim_data = killmail_data["victim"]
-                args = dict()
+                args = {}
                 for prop in KillmailVictim.ENTITY_PROPS + ["damage_taken"]:
                     if prop in victim_data:
                         args[prop] = victim_data[prop]
@@ -382,7 +382,7 @@ class Killmail(_KillmailBase):
 
                 if "position" in victim_data:
                     position_data = victim_data["position"]
-                    args = dict()
+                    args = {}
                     for prop in ["x", "y", "z"]:
                         if prop in position_data:
                             args[prop] = position_data[prop]
@@ -391,7 +391,7 @@ class Killmail(_KillmailBase):
 
             if "attackers" in killmail_data:
                 for attacker_data in killmail_data["attackers"]:
-                    args = dict()
+                    args = {}
                     for prop in KillmailAttacker.ENTITY_PROPS + [
                         "damage_done",
                         "security_status",

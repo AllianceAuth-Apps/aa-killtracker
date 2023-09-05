@@ -22,6 +22,7 @@ class WebhookTooManyRequests(KilltrackerException):
 
     @property
     def retry_after(self) -> int:
+        """Return in how many seconds to retry."""
         return self._reset_after
 
 

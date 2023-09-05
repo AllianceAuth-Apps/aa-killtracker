@@ -36,7 +36,7 @@ class TestTasksEnd2End(LoadTestDataMixin, TestCase):
     @patch(PACKAGE_PATH + ".tasks.retry_task_if_esi_is_down", lambda x: None)
     def test_normal_case(self, requests_mocker, mock_execute):
         # given
-        mock_execute.return_value = dhooks_lite.WebhookResponse(dict(), status_code=200)
+        mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
         requests_mocker.register_uri(
             "GET",
             ZKB_REDISQ_URL,
@@ -68,7 +68,7 @@ class TestTasksEnd2End(LoadTestDataMixin, TestCase):
                 raise task.retry()
 
         # given
-        mock_execute.return_value = dhooks_lite.WebhookResponse(dict(), status_code=200)
+        mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
         mock_retry_task_if_esi_is_down.side_effect = my_retry_task_if_esi_is_down
         requests_mocker.register_uri(
             "GET",

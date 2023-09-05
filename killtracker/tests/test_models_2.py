@@ -65,7 +65,7 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
 
     @staticmethod
     def _matching_killmails(tracker: Tracker, killmail_ids: set) -> list:
-        results = list()
+        results = []
         for killmail_id in killmail_ids:
             killmail = load_killmail(killmail_id)
             new_killmail = tracker.process_killmail(killmail)

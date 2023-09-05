@@ -356,7 +356,7 @@ class TestSendTestKillmailsToWebhook(TestTrackerBase):
 
     def test_run_normal(self, mock_logger, mock_execute):
         # given
-        mock_execute.return_value = dhooks_lite.WebhookResponse(dict(), status_code=200)
+        mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
         # when
         with self.assertRaises(celery.exceptions.Retry):
             send_test_message_to_webhook.delay(self.webhook_1.pk)
