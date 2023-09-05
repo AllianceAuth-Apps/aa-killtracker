@@ -647,34 +647,20 @@ class Tracker(models.Model):
                 ids=killmail.ship_type_distinct_ids()
             )
 
-        # apply filters
+        # match against clauses
         is_matching = True
         distance = None
         jumps = None
         matching_ship_type_ids = None
         try:
-            if is_matching and self.exclude_npc_kills:
-                is_matching = not killmail.zkb.is_npc
-
-            if is_matching and self.require_npc_kills:
-                is_matching = killmail.zkb.is_npc
-
-            if is_matching and self.require_min_value:
-                is_matching = (
-                    killmail.zkb.total_value is not None
-                    and killmail.zkb.total_value >= self.require_min_value * 1_000_000
-                )
-
+            is_matching = self._match_npc(killmail, is_matching)
+            is_matching = self._match_value(killmail, is_matching)
             is_matching, jumps, distance = self._match_geography(killmail, is_matching)
-
             is_matching = self._match_attackers(killmail, is_matching)
-
             is_matching, matching_ship_type_ids = self._match_attacker_ships(
                 killmail, is_matching, matching_ship_type_ids
             )
-
             is_matching = self._match_victims(killmail, is_matching)
-
             is_matching, matching_ship_type_ids = self._match_victim_ship(
                 killmail, is_matching, matching_ship_type_ids
             )
@@ -682,21 +668,39 @@ class Tracker(models.Model):
         except AttributeError:
             is_matching = False
 
-        if is_matching:
-            killmail_new = deepcopy(killmail)
-            main_ship_group = killmail.calc_main_attacker_ship_group(
-                self.MAIN_MINIMUM_COUNT, self.MAIN_MINIMUM_SHARE
+        if not is_matching:
+            return None
+
+        killmail_new = deepcopy(killmail)
+        main_ship_group = killmail.calc_main_attacker_ship_group(
+            self.MAIN_MINIMUM_COUNT, self.MAIN_MINIMUM_SHARE
+        )
+        killmail_new.tracker_info = TrackerInfo(
+            tracker_pk=self.pk,
+            jumps=jumps,
+            distance=distance,
+            main_org=self._killmail_main_attacker_org(killmail),
+            main_ship_group=main_ship_group,
+            matching_ship_type_ids=matching_ship_type_ids,
+        )
+        return killmail_new
+
+    def _match_npc(self, killmail, is_matching):
+        if is_matching and self.exclude_npc_kills:
+            is_matching = not killmail.zkb.is_npc
+
+        if is_matching and self.require_npc_kills:
+            is_matching = killmail.zkb.is_npc
+        return is_matching
+
+    def _match_value(self, killmail, is_matching):
+        if is_matching and self.require_min_value:
+            is_matching = (
+                killmail.zkb.total_value is not None
+                and killmail.zkb.total_value >= self.require_min_value * 1_000_000
             )
-            killmail_new.tracker_info = TrackerInfo(
-                tracker_pk=self.pk,
-                jumps=jumps,
-                distance=distance,
-                main_org=self._killmail_main_attacker_org(killmail),
-                main_ship_group=main_ship_group,
-                matching_ship_type_ids=matching_ship_type_ids,
-            )
-            return killmail_new
-        return None
+
+        return is_matching
 
     def _match_geography(self, killmail, is_matching):
         if (
@@ -712,18 +716,7 @@ class Tracker(models.Model):
             0
         ]
 
-        if self.origin_solar_system:
-            distance_raw = self.origin_solar_system.distance_to(solar_system)
-            distance = meters_to_ly(distance_raw) if distance_raw is not None else None
-            try:
-                jumps = self.origin_solar_system.jumps_to(solar_system)
-            except OSError:
-                # Currently all those exceptions are already captures in eveuniverse,
-                # but this shall remain for when the workaround is fixed
-                jumps = None
-        else:
-            jumps = None
-            distance = None
+        distance, jumps = self._calc_distances(solar_system)
 
         if is_matching and self.exclude_high_sec:
             is_matching = not solar_system.is_high_sec
@@ -768,6 +761,20 @@ class Tracker(models.Model):
             )
 
         return is_matching, jumps, distance
+
+    def _calc_distances(self, solar_system: EveSolarSystem):
+        if not self.origin_solar_system:
+            return None, None
+
+        distance_raw = self.origin_solar_system.distance_to(solar_system)
+        distance = meters_to_ly(distance_raw) if distance_raw is not None else None
+        try:
+            jumps = self.origin_solar_system.jumps_to(solar_system)
+        except OSError:
+            # Currently all those exceptions are already captures in eveuniverse,
+            # but this shall remain for when the workaround is fixed
+            jumps = None
+        return distance, jumps
 
     def _match_attackers(self, killmail, is_matching):
         if is_matching and self.require_min_attackers:
