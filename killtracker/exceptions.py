@@ -1,3 +1,6 @@
+"""Custom exceptions for killtracker."""
+
+
 class KilltrackerException(Exception):
     """Exception from Killtracker"""
 

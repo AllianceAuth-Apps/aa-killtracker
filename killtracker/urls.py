@@ -1,3 +1,5 @@
+"""Routes for killtracker."""
+
 from django.urls import path
 
 from . import views

@@ -1,3 +1,5 @@
+"""Tasks for killtracker."""
+
 from celery import chain, shared_task
 
 from django.db import IntegrityError

@@ -1,3 +1,5 @@
+"""Models for killtracker."""
+
 import json
 from copy import deepcopy
 from datetime import timedelta

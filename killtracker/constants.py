@@ -1,3 +1,5 @@
+"""Global constants for killtracker."""
+
 from enum import IntEnum
 
 SESSION_KEY_TOOGLE_NPC = "killtracker_toogle_npc"

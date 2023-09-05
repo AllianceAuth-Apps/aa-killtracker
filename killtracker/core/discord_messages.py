@@ -13,8 +13,9 @@ from app_utils.logging import LoggerAddTag
 from app_utils.urls import static_file_absolute_url
 from app_utils.views import humanize_value
 
-from .. import __title__
-from ..models import Tracker
+from killtracker import __title__
+from killtracker.models import Tracker
+
 from .killmails import ZKB_KILLMAIL_BASEURL, Killmail
 
 ICON_SIZE = 128

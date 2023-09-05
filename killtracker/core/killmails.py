@@ -1,3 +1,5 @@
+"""Fetching killmails from ZKB."""
+
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -18,14 +20,14 @@ from app_utils.allianceauth import get_redis_client
 from app_utils.json import JSONDateTimeDecoder, JSONDateTimeEncoder
 from app_utils.logging import LoggerAddTag
 
-from .. import USER_AGENT_TEXT, __title__
-from ..app_settings import (
+from killtracker import USER_AGENT_TEXT, __title__
+from killtracker.app_settings import (
     KILLTRACKER_REDISQ_LOCK_TIMEOUT,
     KILLTRACKER_REDISQ_TTW,
     KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
 )
-from ..exceptions import KillmailDoesNotExist
-from ..providers import esi
+from killtracker.exceptions import KillmailDoesNotExist
+from killtracker.providers import esi
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 

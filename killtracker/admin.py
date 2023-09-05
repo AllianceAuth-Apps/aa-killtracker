@@ -1,3 +1,5 @@
+"""Admin site for killtracker."""
+
 from django.contrib import admin
 from django.db.models import Q
 from django.db.models.functions import Lower

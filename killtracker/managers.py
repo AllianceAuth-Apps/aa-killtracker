@@ -1,3 +1,5 @@
+"""Managers for killtracker."""
+
 from datetime import timedelta
 from typing import Dict, Tuple
 

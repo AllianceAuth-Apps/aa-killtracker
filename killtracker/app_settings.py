@@ -1,4 +1,6 @@
-from app_utils.django import clean_setting
+"""Settings for killtracker."""
+
+from app_utils.app_settings import clean_setting
 
 # Timeout for lock to ensure atomic access to ZKB RedisQ
 KILLTRACKER_REDISQ_LOCK_TIMEOUT = clean_setting("KILLTRACKER_REDISQ_LOCK_TIMEOUT", 5)
