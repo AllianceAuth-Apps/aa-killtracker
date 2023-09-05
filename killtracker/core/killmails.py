@@ -39,6 +39,8 @@ REQUESTS_TIMEOUT = (5, 30)
 
 @dataclass
 class _KillmailBase:
+    """Base class for all Killmail."""
+
     def asdict(self) -> dict:
         return asdict(self)
 

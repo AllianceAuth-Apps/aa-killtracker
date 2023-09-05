@@ -193,11 +193,11 @@ class EveKillmailAttacker(_EveKillmailCharacter):
     def __str__(self) -> str:
         if self.character:
             return str(self.character)
-        elif self.corporation:
+        if self.corporation:
             return str(self.corporation)
-        elif self.alliance:
+        if self.alliance:
             return str(self.alliance)
-        elif self.faction:
+        if self.faction:
             return str(self.faction)
         return f"PK:{self.pk}"
 
@@ -370,6 +370,8 @@ class Webhook(models.Model):
     HTTP_TOO_MANY_REQUESTS = 429
 
     class WebhookType(models.IntegerChoices):
+        """A webhook type."""
+
         DISCORD = 1, _("Discord Webhook")
 
     name = models.CharField(
@@ -408,9 +410,7 @@ class Webhook(models.Model):
         return self.name
 
     def __repr__(self) -> str:
-        return "{}(id={}, name='{}')".format(
-            self.__class__.__name__, self.id, self.name
-        )
+        return f"{self.__class__.__name__}(id={self.id}, name='{self.name}')"
 
     def __getstate__(self):
         # Copy the object's state from self.__dict__ which contains
@@ -454,9 +454,9 @@ class Webhook(models.Model):
             message = self.error_queue.dequeue()
             if message is None:
                 break
-            else:
-                self.main_queue.enqueue(message)
-                counter += 1
+
+            self.main_queue.enqueue(message)
+            counter += 1
 
         return counter
 
@@ -579,10 +579,14 @@ class Webhook(models.Model):
 
 
 class Tracker(models.Model):
+    """A tracker for killmails."""
+
     MAIN_MINIMUM_COUNT = 2
     MAIN_MINIMUM_SHARE = 0.25
 
     class ChannelPingType(models.TextChoices):
+        """A channel ping type."""
+
         NONE = "PN", "(none)"
         HERE = "PH", "@here"
         EVERYBODY = "PE", "@everybody"
@@ -1218,7 +1222,7 @@ class Tracker(models.Model):
                 EntityCount(id=x.id, category=x.category, count=org_items.count(x))
                 for x in set(org_items)
             ]
-            max_count = max([x.count for x in org_items_2])
+            max_count = max(x.count for x in org_items_2)
             threshold = max(
                 len(killmail.attackers) * cls.MAIN_MINIMUM_SHARE,
                 cls.MAIN_MINIMUM_COUNT,
@@ -1269,7 +1273,7 @@ class Tracker(models.Model):
                 )
                 for x in set(ship_groups)
             ]
-            max_count = max([x.count for x in ship_groups_2])
+            max_count = max(x.count for x in ship_groups_2)
             threshold = max(
                 len(killmail.attackers) * cls.MAIN_MINIMUM_SHARE,
                 cls.MAIN_MINIMUM_COUNT,

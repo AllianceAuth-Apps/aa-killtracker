@@ -218,7 +218,7 @@ def send_test_message_to_webhook(webhook_pk: int, count: int = 1) -> None:
         return
 
     logger.info("Sending %s test messages to webhook %s", count, webhook)
-    for n in range(count):
-        num_str = f"{n+1}/{count} " if count > 1 else ""
+    for num in range(count):
+        num_str = f"{num+1}/{count} " if count > 1 else ""
         webhook.enqueue_message(content=f"Test message {num_str}from {__title__}.")
     send_messages_to_webhook.delay(webhook.pk)

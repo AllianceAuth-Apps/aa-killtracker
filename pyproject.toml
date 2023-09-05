@@ -72,4 +72,5 @@ disable = [
     "too-many-arguments",
     "too-few-public-methods",
     "import-outside-toplevel",
+    "imported-auth-user",
 ]
