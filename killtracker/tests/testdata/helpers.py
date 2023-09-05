@@ -8,8 +8,9 @@ from eveuniverse.models import EveEntity, EveType, EveUniverseEntityModel
 from allianceauth.eveonline.models import EveAllianceInfo, EveCorporationInfo
 from allianceauth.tests.auth_utils import AuthUtils
 
-from ...core.killmails import Killmail
-from ...models import EveKillmail, Webhook
+from killtracker.core.killmails import Killmail
+from killtracker.models import EveKillmail, Webhook
+
 from . import _currentdir
 from .load_eveuniverse import load_eveuniverse  # noqa  pylint: disable=W0611
 

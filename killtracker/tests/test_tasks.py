@@ -7,9 +7,9 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from ..exceptions import WebhookTooManyRequests
-from ..models import EveKillmail
-from ..tasks import (
+from killtracker.exceptions import WebhookTooManyRequests
+from killtracker.models import EveKillmail
+from killtracker.tasks import (
     delete_stale_killmails,
     generate_killmail_message,
     run_killtracker,
@@ -18,6 +18,7 @@ from ..tasks import (
     send_test_message_to_webhook,
     store_killmail,
 )
+
 from .testdata.factories import TrackerFactory
 from .testdata.helpers import LoadTestDataMixin, load_eve_killmails, load_killmail
 

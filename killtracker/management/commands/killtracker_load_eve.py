@@ -5,8 +5,8 @@ from django.core.management.base import BaseCommand
 
 from app_utils.logging import LoggerAddTag
 
-from ... import __title__
-from ...constants import EveCategoryId, EveGroupId
+from killtracker import __title__
+from killtracker.constants import EveCategoryId, EveGroupId
 
 logger = LoggerAddTag(logging.getLogger(__name__), __title__)
 
