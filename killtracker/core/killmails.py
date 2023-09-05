@@ -198,12 +198,14 @@ class Killmail(_KillmailBase):
                 }
             )
         ids.discard(None)
-        return ids
+        return ids  # type: ignore
 
     def ship_type_distinct_ids(self) -> Set[int]:
         """Return distinct ship type IDs of all entities that are not None."""
         ids = set(self.attackers_ship_type_ids())
-        ids.add(self.victim.ship_type_id)
+        ship_type_id = self.victim.ship_type_id if self.victim else None
+        if ship_type_id:
+            ids.add(ship_type_id)
         return ids
 
     def attacker_final_blow(self) -> Optional[KillmailAttacker]:
@@ -225,12 +227,9 @@ class Killmail(_KillmailBase):
             timeout=KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
         )
 
-    def delete(self) -> bool:
-        """Delete this killmail from temporary storage.
-
-        Returns True on success, else False.
-        """
-        return cache.delete(self._storage_key(self.id))
+    def delete(self) -> None:
+        """Delete this killmail from temporary storage."""
+        cache.delete(self._storage_key(self.id))
 
     @classmethod
     def get(cls, id: int) -> "Killmail":
@@ -360,11 +359,12 @@ class Killmail(_KillmailBase):
             "zkb": killmail_zkb["zkb"],
         }
         killmail = cls._create_from_dict(killmail_dict)
-        cache.set(key=cache_key, value=killmail.asjson())
+        if killmail:
+            cache.set(key=cache_key, value=killmail.asjson())
         return killmail
 
     @classmethod
-    def _create_from_dict(cls, package_data: dict) -> "Killmail":
+    def _create_from_dict(cls, package_data: dict) -> Optional["Killmail"]:
         """creates a new object from given dict.
         Needs to confirm with data structure returned from ZKB RedisQ
         """
