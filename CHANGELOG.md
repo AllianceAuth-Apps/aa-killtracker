@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [0.11.0] - TBD
+
+### Changed
+
+- Added pylint checks
+- Refactor to fix pylint issues
+
 ## [0.10.0] - 2023-07-11
 
 ### Changed

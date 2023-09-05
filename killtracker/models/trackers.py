@@ -676,24 +676,6 @@ class Tracker(models.Model):
         # apply filters
         is_matching = True
         try:
-            if is_matching and self.exclude_high_sec:
-                is_matching = not is_high_sec
-
-            if is_matching and self.exclude_low_sec:
-                is_matching = not is_low_sec
-
-            if is_matching and self.exclude_null_sec:
-                is_matching = not is_null_sec
-
-            if is_matching and self.exclude_w_space:
-                is_matching = not is_w_space
-
-            if is_matching and self.require_min_attackers:
-                is_matching = len(killmail.attackers) >= self.require_min_attackers
-
-            if is_matching and self.require_max_attackers:
-                is_matching = len(killmail.attackers) <= self.require_max_attackers
-
             if is_matching and self.exclude_npc_kills:
                 is_matching = not killmail.zkb.is_npc
 
@@ -706,170 +688,28 @@ class Tracker(models.Model):
                     and killmail.zkb.total_value >= self.require_min_value * 1_000_000
                 )
 
-            if is_matching and self.require_max_distance:
-                is_matching = distance is not None and (
-                    distance <= self.require_max_distance
-                )
+            is_matching = self._match_geography(
+                solar_system,
+                distance,
+                jumps,
+                is_matching,
+                is_high_sec,
+                is_low_sec,
+                is_null_sec,
+                is_w_space,
+            )
 
-            if is_matching and self.require_max_jumps:
-                is_matching = jumps is not None and (jumps <= self.require_max_jumps)
+            is_matching = self._match_attackers(killmail, is_matching)
 
-            if is_matching and self.require_regions.exists():
-                is_matching = (
-                    solar_system
-                    and self.require_regions.filter(
-                        id=solar_system.eve_constellation.eve_region_id
-                    ).exists()
-                )
+            is_matching, matching_ship_type_ids = self._match_attacker_ships(
+                killmail, is_matching, matching_ship_type_ids
+            )
 
-            if is_matching and self.require_constellations.exists():
-                is_matching = (
-                    solar_system
-                    and self.require_constellations.filter(
-                        id=solar_system.eve_constellation_id
-                    ).exists()
-                )
+            is_matching = self._match_victims(killmail, is_matching)
 
-            if is_matching and self.require_solar_systems.exists():
-                is_matching = (
-                    solar_system
-                    and self.require_solar_systems.filter(id=solar_system.id).exists()
-                )
-
-            if is_matching and self.exclude_attacker_alliances.exists():
-                is_matching = self.exclude_attacker_alliances.exclude(
-                    alliance_id__in=killmail.attackers_distinct_alliance_ids()
-                ).exists()
-
-            if is_matching and self.exclude_attacker_corporations.exists():
-                is_matching = self.exclude_attacker_corporations.exclude(
-                    corporation_id__in=killmail.attackers_distinct_corporation_ids()
-                ).exists()
-
-            if is_matching:
-                if self.require_attacker_organizations_final_blow:
-                    attacker_final_blow = killmail.attacker_final_blow()
-                    is_matching = bool(attacker_final_blow) and (
-                        (
-                            bool(attacker_final_blow.alliance_id)
-                            and self.require_attacker_alliances.filter(
-                                alliance_id=attacker_final_blow.alliance_id
-                            ).exists()
-                        )
-                        | (
-                            bool(attacker_final_blow.corporation_id)
-                            and self.require_attacker_corporations.filter(
-                                corporation_id=attacker_final_blow.corporation_id
-                            ).exists()
-                        )
-                    )
-                else:
-                    if is_matching and self.require_attacker_alliances.exists():
-                        is_matching = self.require_attacker_alliances.filter(
-                            alliance_id__in=killmail.attackers_distinct_alliance_ids()
-                        ).exists()
-                    if is_matching and self.require_attacker_corporations.exists():
-                        is_matching = self.require_attacker_corporations.filter(
-                            corporation_id__in=killmail.attackers_distinct_corporation_ids()
-                        ).exists()
-
-            if is_matching and self.require_victim_alliances.exists():
-                is_matching = self.require_victim_alliances.filter(
-                    alliance_id=killmail.victim.alliance_id
-                ).exists()
-
-            if is_matching and self.exclude_victim_alliances.exists():
-                is_matching = self.exclude_victim_alliances.exclude(
-                    alliance_id=killmail.victim.alliance_id
-                ).exists()
-
-            if is_matching and self.require_victim_corporations.exists():
-                is_matching = self.require_victim_corporations.filter(
-                    corporation_id=killmail.victim.corporation_id
-                ).exists()
-
-            if is_matching and self.exclude_victim_corporations.exists():
-                is_matching = self.exclude_victim_corporations.exclude(
-                    corporation_id=killmail.victim.corporation_id
-                ).exists()
-
-            if is_matching and self.require_attacker_states.exists():
-                is_matching = User.objects.filter(
-                    profile__state__in=list(self.require_attacker_states.all()),
-                    character_ownerships__character__character_id__in=(
-                        killmail.attackers_distinct_character_ids()
-                    ),
-                ).exists()
-
-            if is_matching and self.exclude_attacker_states.exists():
-                is_matching = not User.objects.filter(
-                    profile__state__in=list(self.exclude_attacker_states.all()),
-                    character_ownerships__character__character_id__in=(
-                        killmail.attackers_distinct_character_ids()
-                    ),
-                ).exists()
-
-            if is_matching and self.require_victim_states.exists():
-                is_matching = User.objects.filter(
-                    profile__state__in=list(self.require_victim_states.all()),
-                    character_ownerships__character__character_id=(
-                        killmail.victim.character_id
-                    ),
-                ).exists()
-
-            if is_matching and self.require_victim_ship_groups.exists():
-                ship_types_matching_qs = EveType.objects.filter(
-                    eve_group_id__in=list(
-                        self.require_victim_ship_groups.values_list("id", flat=True)
-                    ),
-                    id=killmail.victim.ship_type_id,
-                )
-                is_matching = ship_types_matching_qs.exists()
-                if is_matching:
-                    matching_ship_type_ids = list(
-                        ship_types_matching_qs.values_list("id", flat=True)
-                    )
-
-            if is_matching and self.require_victim_ship_types.exists():
-                ship_types_matching_qs = EveType.objects.filter(
-                    id__in=list(
-                        self.require_victim_ship_types.values_list("id", flat=True)
-                    ),
-                    id=killmail.victim.ship_type_id,
-                )
-                is_matching = ship_types_matching_qs.exists()
-                if is_matching:
-                    matching_ship_type_ids = list(
-                        ship_types_matching_qs.values_list("id", flat=True)
-                    )
-
-            if is_matching and self.require_attackers_ship_groups.exists():
-                ship_types_matching_qs = EveType.objects.filter(
-                    id__in=set(killmail.attackers_ship_type_ids())
-                ).filter(
-                    eve_group_id__in=list(
-                        self.require_attackers_ship_groups.values_list("id", flat=True)
-                    )
-                )
-                is_matching = ship_types_matching_qs.exists()
-                if is_matching:
-                    matching_ship_type_ids = list(
-                        ship_types_matching_qs.values_list("id", flat=True)
-                    )
-
-            if is_matching and self.require_attackers_ship_types.exists():
-                ship_types_matching_qs = EveType.objects.filter(
-                    id__in=set(killmail.attackers_ship_type_ids())
-                ).filter(
-                    id__in=list(
-                        self.require_attackers_ship_types.values_list("id", flat=True)
-                    )
-                )
-                is_matching = ship_types_matching_qs.exists()
-                if is_matching:
-                    matching_ship_type_ids = list(
-                        ship_types_matching_qs.values_list("id", flat=True)
-                    )
+            is_matching, matching_ship_type_ids = self._match_victim_ship(
+                killmail, is_matching, matching_ship_type_ids
+            )
 
         except AttributeError:
             is_matching = False
@@ -886,6 +726,214 @@ class Tracker(models.Model):
             )
             return killmail_new
         return None
+
+    def _match_geography(
+        self,
+        solar_system,
+        distance,
+        jumps,
+        is_matching,
+        is_high_sec,
+        is_low_sec,
+        is_null_sec,
+        is_w_space,
+    ):
+        if is_matching and self.exclude_high_sec:
+            is_matching = not is_high_sec
+
+        if is_matching and self.exclude_low_sec:
+            is_matching = not is_low_sec
+
+        if is_matching and self.exclude_null_sec:
+            is_matching = not is_null_sec
+
+        if is_matching and self.exclude_w_space:
+            is_matching = not is_w_space
+
+        if is_matching and self.require_max_distance:
+            is_matching = distance is not None and (
+                distance <= self.require_max_distance
+            )
+
+        if is_matching and self.require_max_jumps:
+            is_matching = jumps is not None and (jumps <= self.require_max_jumps)
+
+        if is_matching and self.require_regions.exists():
+            is_matching = (
+                solar_system
+                and self.require_regions.filter(
+                    id=solar_system.eve_constellation.eve_region_id
+                ).exists()
+            )
+
+        if is_matching and self.require_constellations.exists():
+            is_matching = (
+                solar_system
+                and self.require_constellations.filter(
+                    id=solar_system.eve_constellation_id
+                ).exists()
+            )
+
+        if is_matching and self.require_solar_systems.exists():
+            is_matching = (
+                solar_system
+                and self.require_solar_systems.filter(id=solar_system.id).exists()
+            )
+
+        return is_matching
+
+    def _match_attackers(self, killmail, is_matching):
+        if is_matching and self.require_min_attackers:
+            is_matching = len(killmail.attackers) >= self.require_min_attackers
+
+        if is_matching and self.require_max_attackers:
+            is_matching = len(killmail.attackers) <= self.require_max_attackers
+
+        if is_matching and self.exclude_attacker_alliances.exists():
+            is_matching = self.exclude_attacker_alliances.exclude(
+                alliance_id__in=killmail.attackers_distinct_alliance_ids()
+            ).exists()
+
+        if is_matching and self.exclude_attacker_corporations.exists():
+            is_matching = self.exclude_attacker_corporations.exclude(
+                corporation_id__in=killmail.attackers_distinct_corporation_ids()
+            ).exists()
+
+        if is_matching:
+            if self.require_attacker_organizations_final_blow:
+                attacker_final_blow = killmail.attacker_final_blow()
+                is_matching = bool(attacker_final_blow) and (
+                    (
+                        bool(attacker_final_blow.alliance_id)
+                        and self.require_attacker_alliances.filter(
+                            alliance_id=attacker_final_blow.alliance_id
+                        ).exists()
+                    )
+                    | (
+                        bool(attacker_final_blow.corporation_id)
+                        and self.require_attacker_corporations.filter(
+                            corporation_id=attacker_final_blow.corporation_id
+                        ).exists()
+                    )
+                )
+            else:
+                if is_matching and self.require_attacker_alliances.exists():
+                    is_matching = self.require_attacker_alliances.filter(
+                        alliance_id__in=killmail.attackers_distinct_alliance_ids()
+                    ).exists()
+                if is_matching and self.require_attacker_corporations.exists():
+                    is_matching = self.require_attacker_corporations.filter(
+                        corporation_id__in=killmail.attackers_distinct_corporation_ids()
+                    ).exists()
+
+        if is_matching and self.require_attacker_states.exists():
+            is_matching = User.objects.filter(
+                profile__state__in=list(self.require_attacker_states.all()),
+                character_ownerships__character__character_id__in=(
+                    killmail.attackers_distinct_character_ids()
+                ),
+            ).exists()
+
+        if is_matching and self.exclude_attacker_states.exists():
+            is_matching = not User.objects.filter(
+                profile__state__in=list(self.exclude_attacker_states.all()),
+                character_ownerships__character__character_id__in=(
+                    killmail.attackers_distinct_character_ids()
+                ),
+            ).exists()
+
+        return is_matching
+
+    def _match_attacker_ships(self, killmail, is_matching, matching_ship_type_ids):
+        if is_matching and self.require_attackers_ship_groups.exists():
+            ship_types_matching_qs = EveType.objects.filter(
+                id__in=set(killmail.attackers_ship_type_ids())
+            ).filter(
+                eve_group_id__in=list(
+                    self.require_attackers_ship_groups.values_list("id", flat=True)
+                )
+            )
+            is_matching = ship_types_matching_qs.exists()
+            if is_matching:
+                matching_ship_type_ids = list(
+                    ship_types_matching_qs.values_list("id", flat=True)
+                )
+
+        if is_matching and self.require_attackers_ship_types.exists():
+            ship_types_matching_qs = EveType.objects.filter(
+                id__in=set(killmail.attackers_ship_type_ids())
+            ).filter(
+                id__in=list(
+                    self.require_attackers_ship_types.values_list("id", flat=True)
+                )
+            )
+            is_matching = ship_types_matching_qs.exists()
+            if is_matching:
+                matching_ship_type_ids = list(
+                    ship_types_matching_qs.values_list("id", flat=True)
+                )
+
+        return is_matching, matching_ship_type_ids
+
+    def _match_victims(self, killmail, is_matching):
+        if is_matching and self.require_victim_alliances.exists():
+            is_matching = self.require_victim_alliances.filter(
+                alliance_id=killmail.victim.alliance_id
+            ).exists()
+
+        if is_matching and self.exclude_victim_alliances.exists():
+            is_matching = self.exclude_victim_alliances.exclude(
+                alliance_id=killmail.victim.alliance_id
+            ).exists()
+
+        if is_matching and self.require_victim_corporations.exists():
+            is_matching = self.require_victim_corporations.filter(
+                corporation_id=killmail.victim.corporation_id
+            ).exists()
+
+        if is_matching and self.exclude_victim_corporations.exists():
+            is_matching = self.exclude_victim_corporations.exclude(
+                corporation_id=killmail.victim.corporation_id
+            ).exists()
+
+        if is_matching and self.require_victim_states.exists():
+            is_matching = User.objects.filter(
+                profile__state__in=list(self.require_victim_states.all()),
+                character_ownerships__character__character_id=(
+                    killmail.victim.character_id
+                ),
+            ).exists()
+
+        return is_matching
+
+    def _match_victim_ship(self, killmail, is_matching, matching_ship_type_ids):
+        if is_matching and self.require_victim_ship_groups.exists():
+            ship_types_matching_qs = EveType.objects.filter(
+                eve_group_id__in=list(
+                    self.require_victim_ship_groups.values_list("id", flat=True)
+                ),
+                id=killmail.victim.ship_type_id,
+            )
+            is_matching = ship_types_matching_qs.exists()
+            if is_matching:
+                matching_ship_type_ids = list(
+                    ship_types_matching_qs.values_list("id", flat=True)
+                )
+
+        if is_matching and self.require_victim_ship_types.exists():
+            ship_types_matching_qs = EveType.objects.filter(
+                id__in=list(
+                    self.require_victim_ship_types.values_list("id", flat=True)
+                ),
+                id=killmail.victim.ship_type_id,
+            )
+            is_matching = ship_types_matching_qs.exists()
+            if is_matching:
+                matching_ship_type_ids = list(
+                    ship_types_matching_qs.values_list("id", flat=True)
+                )
+
+        return is_matching, matching_ship_type_ids
 
     @classmethod
     def _killmail_main_attacker_org(cls, killmail) -> Optional[EntityCount]:
