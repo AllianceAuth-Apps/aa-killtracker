@@ -110,6 +110,7 @@ class EveKillmailBaseManager(models.Manager):
     def update_or_create_from_killmail(
         self, killmail: Killmail
     ) -> Tuple[models.Model, bool]:
+        """Update or create new EveKillmail from a Killmail object."""
         with transaction.atomic():
             try:
                 self.get(id=killmail.id).delete()

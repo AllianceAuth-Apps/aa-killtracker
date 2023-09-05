@@ -1,5 +1,7 @@
 """Fetching killmails from ZKB."""
 
+# pylint: disable = redefined-builtin
+
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -42,6 +44,7 @@ class _KillmailBase:
     """Base class for all Killmail."""
 
     def asdict(self) -> dict:
+        """Return this object as dict."""
         return asdict(self)
 
 
@@ -64,11 +67,15 @@ class _KillmailCharacter(_KillmailBase):
 
 @dataclass
 class KillmailVictim(_KillmailCharacter):
+    """A victim on a killmail."""
+
     damage_taken: Optional[int] = None
 
 
 @dataclass
 class KillmailAttacker(_KillmailCharacter):
+    """An attacker on a killmail."""
+
     ENTITY_PROPS = _KillmailCharacter.ENTITY_PROPS + ["weapon_type_id"]
 
     damage_done: Optional[int] = None
@@ -79,6 +86,7 @@ class KillmailAttacker(_KillmailCharacter):
 
 @dataclass
 class KillmailPosition(_KillmailBase):
+    "A position for a killmail."
     x: Optional[float] = None
     y: Optional[float] = None
     z: Optional[float] = None
@@ -86,6 +94,8 @@ class KillmailPosition(_KillmailBase):
 
 @dataclass
 class KillmailZkb(_KillmailBase):
+    """A ZKB entry for a killmail."""
+
     location_id: Optional[int] = None
     hash: Optional[str] = None
     fitted_value: Optional[float] = None
@@ -98,6 +108,8 @@ class KillmailZkb(_KillmailBase):
 
 @dataclass(eq=True, frozen=True)
 class EntityCount:
+    """Counts of an Eve entity."""
+
     CATEGORY_ALLIANCE = "alliance"
     CATEGORY_CORPORATION = "corporation"
     CATEGORY_INVENTORY_GROUP = "inventory_group"
@@ -109,15 +121,19 @@ class EntityCount:
 
     @property
     def is_alliance(self) -> bool:
+        """Return True when count is for an alliance."""
         return self.category == self.CATEGORY_ALLIANCE
 
     @property
     def is_corporation(self) -> bool:
+        """Return True when count is for a corporation."""
         return self.category == self.CATEGORY_CORPORATION
 
 
 @dataclass
 class TrackerInfo(_KillmailBase):
+    """A tracker info."""
+
     tracker_pk: int
     jumps: Optional[int] = None
     distance: Optional[float] = None
@@ -128,6 +144,8 @@ class TrackerInfo(_KillmailBase):
 
 @dataclass
 class Killmail(_KillmailBase):
+    """A killmail body."""
+
     _STORAGE_BASE_KEY = "killtracker_storage_killmail_"
 
     id: int
@@ -196,6 +214,7 @@ class Killmail(_KillmailBase):
         return None
 
     def asjson(self) -> str:
+        """Convert killmail into JSON data."""
         return json.dumps(asdict(self), cls=JSONDateTimeEncoder)
 
     def save(self) -> None:
@@ -229,6 +248,7 @@ class Killmail(_KillmailBase):
 
     @classmethod
     def from_dict(cls, data: dict) -> "Killmail":
+        """Create new object from dictionary."""
         try:
             return from_dict(data_class=Killmail, data=data)
         except DaciteError as ex:
@@ -237,6 +257,7 @@ class Killmail(_KillmailBase):
 
     @classmethod
     def from_json(cls, json_str: str) -> "Killmail":
+        """Create new object from JSON data."""
         return cls.from_dict(json.loads(json_str, cls=JSONDateTimeDecoder))
 
     @classmethod
@@ -251,7 +272,7 @@ class Killmail(_KillmailBase):
             with redis.lock(
                 cls.lock_key(), blocking_timeout=KILLTRACKER_REDISQ_LOCK_TIMEOUT
             ):
-                r = requests.get(
+                response = requests.get(
                     ZKB_REDISQ_URL,
                     params={"ttw": KILLTRACKER_REDISQ_TTW},
                     timeout=REQUESTS_TIMEOUT,
@@ -264,24 +285,26 @@ class Killmail(_KillmailBase):
             )
             return None
 
-        if r.status_code == HTTPStatus.TOO_MANY_REQUESTS:
-            logger.error("429 Client Error: Too many requests: %s", r.text)
+        if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
+            logger.error("429 Client Error: Too many requests: %s", response.text)
             return None
-        r.raise_for_status()
+        response.raise_for_status()
         try:
-            data = r.json()
+            data = response.json()
         except JSONDecodeError:
-            logger.error("Error from ZKB API:\n%s", r.text)
+            logger.error("Error from ZKB API:\n%s", response.text)
             return None
+
         if data:
             logger.debug("data:\n%s", data)
+
         if data and "package" in data and data["package"]:
             logger.info("Received a killmail from ZKB RedisQ")
             package_data = data["package"]
             return cls._create_from_dict(package_data)
-        else:
-            logger.debug("Did not received a killmail from ZKB RedisQ")
-            return None
+
+        logger.debug("Did not received a killmail from ZKB RedisQ")
+        return None
 
     @classmethod
     def create_from_zkb_api(cls, killmail_id: int) -> Optional["Killmail"]:
@@ -299,11 +322,11 @@ class Killmail(_KillmailBase):
             killmail_id,
         )
         url = f"{ZKB_API_URL}killID/{killmail_id}/"
-        r = requests.get(
+        response = requests.get(
             url, timeout=REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
         )
-        r.raise_for_status()
-        zkb_data = r.json()
+        response.raise_for_status()
+        zkb_data = response.json()
         if not zkb_data:
             logger.warning(
                 "ZKB API did not return any data for killmail ID %d", killmail_id

@@ -133,8 +133,8 @@ def generate_killmail_message(self, tracker_pk: int, killmail_id: int) -> None:
             countdown=KILLTRACKER_GENERATE_MESSAGE_RETRY_COUNTDOWN,
             exc=ex,
         )
-    else:
-        send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
+
+    send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
@@ -202,8 +202,8 @@ def send_messages_to_webhook(self, webhook_pk: int) -> None:
             )
 
         raise self.retry(countdown=KILLTRACKER_DISCORD_SEND_DELAY)
-    else:
-        logger.debug("%s: No more messages to send for webhook", webhook)
+
+    logger.debug("%s: No more messages to send for webhook", webhook)
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
