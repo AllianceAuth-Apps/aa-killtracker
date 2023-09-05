@@ -100,7 +100,7 @@ class Webhook(models.Model):
         return self.name
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(id={self.id}, name='{self.name}')"
+        return f"{self.__class__.__name__}(id={self.id}, name='{self.name}')"  # type: ignore
 
     def __getstate__(self):
         # Copy the object's state from self.__dict__ which contains
@@ -121,7 +121,7 @@ class Webhook(models.Model):
         self.error_queue = self._create_queue("error")
 
     def save(self, *args, **kwargs):
-        is_new = self.id is None
+        is_new = self.id is None  # type: ignore
         super().save(*args, **kwargs)
         if is_new:
             self.main_queue = self._create_queue("main")
@@ -140,25 +140,29 @@ class Webhook(models.Model):
         returns number of moved messages.
         """
         counter = 0
-        while True:
-            message = self.error_queue.dequeue()
-            if message is None:
-                break
+        if self.error_queue and self.main_queue:
+            while True:
+                message = self.error_queue.dequeue()
+                if message is None:
+                    break
 
-            self.main_queue.enqueue(message)
-            counter += 1
+                self.main_queue.enqueue(message)
+                counter += 1
 
         return counter
 
     def enqueue_message(
         self,
-        content: str = None,
-        embeds: List[dhooks_lite.Embed] = None,
-        tts: bool = None,
-        username: str = None,
-        avatar_url: str = None,
+        content: Optional[str] = None,
+        embeds: Optional[List[dhooks_lite.Embed]] = None,
+        tts: Optional[bool] = None,
+        username: Optional[str] = None,
+        avatar_url: Optional[str] = None,
     ) -> int:
         """Enqueues a message to be send with this webhook"""
+        if not self.main_queue:
+            return 0
+
         username = __title__ if KILLTRACKER_WEBHOOK_SET_AVATAR else username
         brand_url = static_file_absolute_url("killtracker/killtracker_logo.png")
         avatar_url = brand_url if KILLTRACKER_WEBHOOK_SET_AVATAR else avatar_url
@@ -174,11 +178,11 @@ class Webhook(models.Model):
 
     @staticmethod
     def _discord_message_asjson(
-        content: str = None,
-        embeds: List[dhooks_lite.Embed] = None,
-        tts: bool = None,
-        username: str = None,
-        avatar_url: str = None,
+        content: Optional[str] = None,
+        embeds: Optional[List[dhooks_lite.Embed]] = None,
+        tts: Optional[bool] = None,
+        username: Optional[str] = None,
+        avatar_url: Optional[str] = None,
     ) -> str:
         """Converts a Discord message to JSON and returns it
 
@@ -206,13 +210,13 @@ class Webhook(models.Model):
 
         return json.dumps(message, cls=JSONDateTimeEncoder)
 
-    def send_message_to_webhook(self, message_json: str) -> bool:
+    def send_message_to_webhook(self, message_json: str) -> dhooks_lite.WebhookResponse:
         """Send given message to webhook
 
         Params
             message_json: Discord message encoded in JSON
         """
-        timeout = cache.ttl(self._blocked_cache_key())
+        timeout = cache.ttl(self._blocked_cache_key())  # type: ignore
         if timeout:
             raise WebhookTooManyRequests(timeout)
 
@@ -602,9 +606,9 @@ class Tracker(models.Model):
             or self.exclude_w_space
             or self.require_max_distance is not None
             or self.require_max_jumps is not None
-            or self.require_regions.all()
-            or self.require_constellations.all()
-            or self.require_solar_systems.all()
+            or self.require_regions.exists()
+            or self.require_constellations.exists()
+            or self.require_solar_systems.exists()
         )
 
     @property
@@ -613,10 +617,10 @@ class Tracker(models.Model):
         e.g. the ship type of the victim
         """
         return (
-            self.require_attackers_ship_groups.all()
-            or self.require_attackers_ship_types.all()
-            or self.require_victim_ship_groups.all()
-            or self.require_victim_ship_types.all()
+            self.require_attackers_ship_groups.exists()
+            or self.require_attackers_ship_types.exists()
+            or self.require_victim_ship_groups.exists()
+            or self.require_victim_ship_types.exists()
         )
 
     def process_killmail(
@@ -639,7 +643,7 @@ class Tracker(models.Model):
 
         # Make sure all ship types are in the local database
         if self.has_type_clause:
-            EveType.objects.bulk_get_or_create_esi(
+            EveType.objects.bulk_get_or_create_esi(  # type: ignore
                 ids=killmail.ship_type_distinct_ids()
             )
 
@@ -699,12 +703,15 @@ class Tracker(models.Model):
         ):
             return is_matching, None, None
 
-        solar_system, _ = EveSolarSystem.objects.get_or_create_esi(
+        solar_system: EveSolarSystem = EveSolarSystem.objects.get_or_create_esi(  # type: ignore
             id=killmail.solar_system_id
-        )
+        )[
+            0
+        ]
 
         if self.origin_solar_system:
-            distance = meters_to_ly(self.origin_solar_system.distance_to(solar_system))
+            distance_raw = self.origin_solar_system.distance_to(solar_system)
+            distance = meters_to_ly(distance_raw) if distance_raw is not None else None
             try:
                 jumps = self.origin_solar_system.jumps_to(solar_system)
             except OSError:
@@ -747,7 +754,7 @@ class Tracker(models.Model):
             is_matching = (
                 solar_system
                 and self.require_constellations.filter(
-                    id=solar_system.eve_constellation_id
+                    id=solar_system.eve_constellation_id  # type: ignore
                 ).exists()
             )
 
@@ -934,10 +941,12 @@ class Tracker(models.Model):
 
         if org_items:
             org_items_2 = [
-                EntityCount(id=x.id, category=x.category, count=org_items.count(x))
-                for x in set(org_items)
+                EntityCount(
+                    id=obj.id, category=obj.category, count=org_items.count(obj)
+                )
+                for obj in set(org_items)
             ]
-            max_count = max(x.count for x in org_items_2)
+            max_count = max(x.count or 0 for x in org_items_2)
             threshold = max(
                 len(killmail.attackers) * cls.MAIN_MINIMUM_SHARE,
                 cls.MAIN_MINIMUM_COUNT,
@@ -972,7 +981,7 @@ class Tracker(models.Model):
 
             ship_groups.append(
                 EntityCount(
-                    id=ship_type.eve_group_id,
+                    id=ship_type.eve_group_id,  # type: ignore
                     category=EntityCount.CATEGORY_INVENTORY_GROUP,
                     name=ship_type.eve_group.name,
                 )
@@ -988,18 +997,18 @@ class Tracker(models.Model):
                 )
                 for x in set(ship_groups)
             ]
-            max_count = max(x.count for x in ship_groups_2)
+            max_count = max(x.count or 0 for x in ship_groups_2)
             threshold = max(
                 len(killmail.attackers) * cls.MAIN_MINIMUM_SHARE,
                 cls.MAIN_MINIMUM_COUNT,
             )
             if max_count >= threshold:
-                return sorted(ship_groups_2, key=lambda x: x.count).pop()
+                return sorted(ship_groups_2, key=lambda x: x.count or 0).pop()
 
         return None
 
     def generate_killmail_message(
-        self, killmail: Killmail, intro_text: str = None
+        self, killmail: Killmail, intro_text: Optional[str] = None
     ) -> int:
         """generate a message from given killmail and enqueue for later sending
 
