@@ -78,7 +78,86 @@ def create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
 
     resolver = EveEntity.objects.bulk_resolve_names(ids=killmail.entity_ids())
 
-    # victim
+    # self info
+    show_as_fleetkill = False
+    distance_text = ""
+    main_org_text = ""
+    main_org_name = ""
+    main_org_icon_url = eveimageserver.alliance_logo_url(1, size=ICON_SIZE)
+    main_ship_group_text = ""
+    tracked_ship_types_text = ""
+    embed_color = None
+
+    if killmail.tracker_info:
+        show_as_fleetkill = tracker.identify_fleets
+        embed_color = int(tracker.color[1:], 16) if tracker.color else None
+
+        distance_text = _calc_distance(tracker, killmail)
+        (
+            show_as_fleetkill,
+            main_org_text,
+            main_org_name,
+            main_org_icon_url,
+        ) = _calc_main_group(tracker, killmail, resolver, show_as_fleetkill)
+        main_ship_group_text = _calc_main_ship_group(killmail)
+        tracked_ship_types_text = _calc_tracked_ship_types(killmail, resolver)
+
+    victim_ship_type_name = resolver.to_name(killmail.victim.ship_type_id)
+
+    solar_system_text = _calc_solar_system(tracker, killmail)
+    total_value = (
+        humanize_value(killmail.zkb.total_value) if killmail.zkb.total_value else "?"
+    )
+    final_attacker_str, final_attacker_ship_type_name = _calc_final_attacker(
+        tracker, killmail, resolver
+    )
+    _, _, _, victim_str = _calc_victim(tracker, killmail, resolver)
+    description = (
+        f"{victim_str} lost their **{victim_ship_type_name}** "
+        f"in {solar_system_text} "
+        f"worth **{total_value}** ISK.\n"
+        f"Final blow by {final_attacker_str} "
+        f"in a **{final_attacker_ship_type_name}**.\n"
+        f"Attackers: **{len(killmail.attackers):,}**{main_org_text}"
+        f"{main_ship_group_text}"
+        f"{tracked_ship_types_text}"
+        f"{distance_text}"
+    )
+
+    title = _calc_title(
+        killmail, resolver, show_as_fleetkill, main_org_name, victim_ship_type_name
+    )
+    thumbnail_url = _calc_thumbnail_url(killmail, show_as_fleetkill, main_org_icon_url)
+
+    zkb_killmail_url = f"{ZKB_KILLMAIL_BASEURL}{killmail.id}/"
+    # TODO This is a workaround for Embed.Author.name. Address in dhooks_lite
+    victim_organization, victim_org_url, victim_org_icon_url, victim_str = _calc_victim(
+        tracker, killmail, resolver
+    )
+    author = (
+        dhooks_lite.Author(
+            name=victim_organization if victim_organization else "?",
+            url=victim_org_url,
+            icon_url=victim_org_icon_url,
+        )
+        if victim_organization and victim_org_url and victim_org_icon_url
+        else None
+    )
+    zkb_icon_url = static_file_absolute_url("killtracker/zkb_icon.png")
+    embed = dhooks_lite.Embed(
+        author=author,
+        description=description,
+        title=title,
+        url=zkb_killmail_url,
+        thumbnail=dhooks_lite.Thumbnail(url=thumbnail_url),
+        footer=dhooks_lite.Footer(text="zKillboard", icon_url=zkb_icon_url),
+        timestamp=killmail.time,
+        color=embed_color,
+    )
+    return embed
+
+
+def _calc_victim(tracker, killmail, resolver):
     if killmail.victim.alliance_id:
         victim_organization = resolver.to_name(killmail.victim.alliance_id)
         victim_org_url = zkillboard.alliance_url(killmail.victim.alliance_id)
@@ -112,8 +191,10 @@ def create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
         victim_str = victim_corporation_zkb_link
     else:
         victim_str = ""
+    return victim_organization, victim_org_url, victim_org_icon_url, victim_str
 
-    # final attacker
+
+def _calc_final_attacker(tracker, killmail, resolver):
     for attacker in killmail.attackers:
         if attacker.is_final_blow:
             final_attacker = attacker
@@ -121,135 +202,117 @@ def create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
     else:
         final_attacker = None
 
-    if final_attacker:
-        if final_attacker.corporation_id:
-            final_attacker_corporation_zkb_link = _corporation_zkb_link(
-                tracker, final_attacker.corporation_id, resolver
-            )
-        else:
-            final_attacker_corporation_zkb_link = ""
+    if not final_attacker:
+        return "", ""
 
-        if final_attacker.character_id and final_attacker.corporation_id:
-            final_attacker_character_zkb_link = _character_zkb_link(
-                tracker, final_attacker.character_id, resolver
-            )
-            final_attacker_str = (
-                f"{final_attacker_character_zkb_link} "
-                f"({final_attacker_corporation_zkb_link})"
-            )
-        elif final_attacker.corporation_id:
-            final_attacker_str = f"{final_attacker_corporation_zkb_link}"
-        elif final_attacker.faction_id:
-            final_attacker_str = f"**{resolver.to_name(final_attacker.faction_id)}**"
-        else:
-            final_attacker_str = "(Unknown final_attacker)"
-
-        final_attacker_ship_type_name = resolver.to_name(final_attacker.ship_type_id)
-
-    else:
-        final_attacker_str = ""
-        final_attacker_ship_type_name = ""
-
-    if killmail.solar_system_id:
-        solar_system, _ = EveSolarSystem.objects.get_or_create_esi(
-            id=killmail.solar_system_id
+    if final_attacker.corporation_id:
+        final_attacker_corporation_zkb_link = _corporation_zkb_link(
+            tracker, final_attacker.corporation_id, resolver
         )
-        solar_system_link = tracker.webhook.create_message_link(
-            name=solar_system.name, url=dotlan.solar_system_url(solar_system.name)
+    else:
+        final_attacker_corporation_zkb_link = ""
+
+    if final_attacker.character_id and final_attacker.corporation_id:
+        final_attacker_character_zkb_link = _character_zkb_link(
+            tracker, final_attacker.character_id, resolver
         )
-        region_name = solar_system.eve_constellation.eve_region.name
-        solar_system_text = f"{solar_system_link} ({region_name})"
+        final_attacker_str = (
+            f"{final_attacker_character_zkb_link} "
+            f"({final_attacker_corporation_zkb_link})"
+        )
+    elif final_attacker.corporation_id:
+        final_attacker_str = f"{final_attacker_corporation_zkb_link}"
+    elif final_attacker.faction_id:
+        final_attacker_str = f"**{resolver.to_name(final_attacker.faction_id)}**"
     else:
-        solar_system_text = ""
+        final_attacker_str = "(Unknown final_attacker)"
 
-    # self info
-    show_as_fleetkill = False
-    distance_text = ""
-    main_org_text = ""
-    main_org_name = ""
-    main_org_icon_url = eveimageserver.alliance_logo_url(1, size=ICON_SIZE)
-    main_ship_group_text = ""
-    tracked_ship_types_text = ""
-    embed_color = None
-    if killmail.tracker_info:
-        show_as_fleetkill = tracker.identify_fleets
-        embed_color = int(tracker.color[1:], 16) if tracker.color else None
-        if tracker.origin_solar_system:
-            origin_solar_system_link = tracker.webhook.create_message_link(
-                name=tracker.origin_solar_system.name,
-                url=dotlan.solar_system_url(tracker.origin_solar_system.name),
+    final_attacker_ship_type_name = resolver.to_name(final_attacker.ship_type_id)
+
+    return final_attacker_str, final_attacker_ship_type_name
+
+
+def _calc_solar_system(tracker, killmail):
+    if not killmail.solar_system_id:
+        return ""
+
+    solar_system, _ = EveSolarSystem.objects.get_or_create_esi(
+        id=killmail.solar_system_id
+    )
+    solar_system_link = tracker.webhook.create_message_link(
+        name=solar_system.name, url=dotlan.solar_system_url(solar_system.name)
+    )
+    region_name = solar_system.eve_constellation.eve_region.name
+    return f"{solar_system_link} ({region_name})"
+
+
+def _calc_distance(tracker, killmail):
+    if not tracker.origin_solar_system:
+        return ""
+
+    origin_solar_system_link = tracker.webhook.create_message_link(
+        name=tracker.origin_solar_system.name,
+        url=dotlan.solar_system_url(tracker.origin_solar_system.name),
+    )
+    if killmail.tracker_info.distance is not None:
+        distance_str = f"{killmail.tracker_info.distance:,.1f}"
+    else:
+        distance_str = "?"
+
+    if killmail.tracker_info.jumps is not None:
+        jumps_str = killmail.tracker_info.jumps
+    else:
+        jumps_str = "?"
+
+    distance_text = (
+        f"\nDistance from {origin_solar_system_link}: "
+        f"{distance_str} LY | {jumps_str} jumps"
+    )
+
+    return distance_text
+
+
+def _calc_main_group(tracker, killmail, resolver, show_as_fleetkill):
+    main_org = killmail.tracker_info.main_org
+    if main_org:
+        main_org_name = resolver.to_name(main_org.id)
+        if main_org.is_corporation:
+            main_org_link = _corporation_zkb_link(tracker, main_org.id, resolver)
+            main_org_icon_url = eveimageserver.corporation_logo_url(
+                main_org.id, size=ICON_SIZE
             )
-            if killmail.tracker_info.distance is not None:
-                distance_str = f"{killmail.tracker_info.distance:,.1f}"
-            else:
-                distance_str = "?"
-
-            if killmail.tracker_info.jumps is not None:
-                jumps_str = killmail.tracker_info.jumps
-            else:
-                jumps_str = "?"
-
-            distance_text = (
-                f"\nDistance from {origin_solar_system_link}: "
-                f"{distance_str} LY | {jumps_str} jumps"
-            )
-
-        # main group
-        main_org = killmail.tracker_info.main_org
-        if main_org:
-            main_org_name = resolver.to_name(main_org.id)
-            if main_org.is_corporation:
-                main_org_link = _corporation_zkb_link(tracker, main_org.id, resolver)
-                main_org_icon_url = eveimageserver.corporation_logo_url(
-                    main_org.id, size=ICON_SIZE
-                )
-            else:
-                main_org_link = _alliance_zkb_link(tracker, main_org.id, resolver)
-                main_org_icon_url = eveimageserver.alliance_logo_url(
-                    main_org.id, size=ICON_SIZE
-                )
-            main_org_text = f" | Main group: {main_org_link} ({main_org.count})"
         else:
-            show_as_fleetkill = False
-
-        # main ship group
-        main_ship_group = killmail.tracker_info.main_ship_group
-        if main_ship_group:
-            main_ship_group_text = f"\nMain ship class: **{main_ship_group.name}**"
-
-        # tracked attacker ships
-        matching_ship_type_ids = killmail.tracker_info.matching_ship_type_ids
-        if matching_ship_type_ids:
-            ship_types_text = "**, **".join(
-                sorted(
-                    [resolver.to_name(type_id) for type_id in matching_ship_type_ids]
-                )
+            main_org_link = _alliance_zkb_link(tracker, main_org.id, resolver)
+            main_org_icon_url = eveimageserver.alliance_logo_url(
+                main_org.id, size=ICON_SIZE
             )
-            tracked_ship_types_text = (
-                f"\nTracked ship types involved: **{ship_types_text}**"
-            )
-
-    victim_ship_type_name = resolver.to_name(killmail.victim.ship_type_id)
-    total_value = (
-        humanize_value(killmail.zkb.total_value) if killmail.zkb.total_value else "?"
-    )
-    description = (
-        f"{victim_str} lost their **{victim_ship_type_name}** "
-        f"in {solar_system_text} "
-        f"worth **{total_value}** ISK.\n"
-        f"Final blow by {final_attacker_str} "
-        f"in a **{final_attacker_ship_type_name}**.\n"
-        f"Attackers: **{len(killmail.attackers):,}**{main_org_text}"
-        f"{main_ship_group_text}"
-        f"{tracked_ship_types_text}"
-        f"{distance_text}"
-    )
-    solar_system_name = resolver.to_name(killmail.solar_system_id)
-    if show_as_fleetkill:
-        title = f"{solar_system_name} | {main_org_name} | Fleetkill"
+        main_org_text = f" | Main group: {main_org_link} ({main_org.count})"
     else:
-        title = f"{solar_system_name} | {victim_ship_type_name} | Killmail"
+        show_as_fleetkill = False
+        main_org_text = main_org_name = main_org_icon_url = ""
+    return show_as_fleetkill, main_org_text, main_org_name, main_org_icon_url
 
+
+def _calc_main_ship_group(killmail) -> str:
+    main_ship_group = killmail.tracker_info.main_ship_group
+    if not main_ship_group:
+        return ""
+
+    return f"\nMain ship class: **{main_ship_group.name}**"
+
+
+def _calc_tracked_ship_types(killmail, resolver) -> str:
+    matching_ship_type_ids = killmail.tracker_info.matching_ship_type_ids
+    if not matching_ship_type_ids:
+        return ""
+
+    ship_types_text = "**, **".join(
+        sorted([resolver.to_name(type_id) for type_id in matching_ship_type_ids])
+    )
+    return f"\nTracked ship types involved: **{ship_types_text}**"
+
+
+def _calc_thumbnail_url(killmail, show_as_fleetkill, main_org_icon_url):
     if show_as_fleetkill:
         thumbnail_url = main_org_icon_url
     else:
@@ -257,29 +320,18 @@ def create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
             killmail.victim.ship_type_id, size=ICON_SIZE
         )
 
-    zkb_killmail_url = f"{ZKB_KILLMAIL_BASEURL}{killmail.id}/"
-    # TODO This is a workaround for Embed.Author.name. Address in dhooks_lite
-    author = (
-        dhooks_lite.Author(
-            name=victim_organization if victim_organization else "?",
-            url=victim_org_url,
-            icon_url=victim_org_icon_url,
-        )
-        if victim_organization and victim_org_url and victim_org_icon_url
-        else None
-    )
-    zkb_icon_url = static_file_absolute_url("killtracker/zkb_icon.png")
-    embed = dhooks_lite.Embed(
-        author=author,
-        description=description,
-        title=title,
-        url=zkb_killmail_url,
-        thumbnail=dhooks_lite.Thumbnail(url=thumbnail_url),
-        footer=dhooks_lite.Footer(text="zKillboard", icon_url=zkb_icon_url),
-        timestamp=killmail.time,
-        color=embed_color,
-    )
-    return embed
+    return thumbnail_url
+
+
+def _calc_title(
+    killmail, resolver, show_as_fleetkill, main_org_name, victim_ship_type_name
+):
+    solar_system_name = resolver.to_name(killmail.solar_system_id)
+    if show_as_fleetkill:
+        title = f"{solar_system_name} | {main_org_name} | Fleetkill"
+    else:
+        title = f"{solar_system_name} | {victim_ship_type_name} | Killmail"
+    return title
 
 
 def _character_zkb_link(
