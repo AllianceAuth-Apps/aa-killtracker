@@ -3,7 +3,7 @@
 import json
 from copy import deepcopy
 from datetime import timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import dhooks_lite
 from simple_mq import SimpleMQ
@@ -651,7 +651,7 @@ class Tracker(models.Model):
         is_matching = True
         distance = None
         jumps = None
-        matching_ship_type_ids = None
+        matching_ship_type_ids = []
         try:
             is_matching = self._match_npc(killmail, is_matching)
             is_matching = self._match_value(killmail, is_matching)
@@ -685,15 +685,15 @@ class Tracker(models.Model):
         )
         return killmail_new
 
-    def _match_npc(self, killmail, is_matching):
+    def _match_npc(self, killmail: Killmail, is_matching: bool) -> bool:
         if is_matching and self.exclude_npc_kills:
-            is_matching = not killmail.zkb.is_npc
+            is_matching = not bool(killmail.zkb.is_npc)
 
         if is_matching and self.require_npc_kills:
-            is_matching = killmail.zkb.is_npc
+            is_matching = bool(killmail.zkb.is_npc)
         return is_matching
 
-    def _match_value(self, killmail, is_matching):
+    def _match_value(self, killmail: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_min_value:
             is_matching = (
                 killmail.zkb.total_value is not None
@@ -702,7 +702,9 @@ class Tracker(models.Model):
 
         return is_matching
 
-    def _match_geography(self, killmail, is_matching):
+    def _match_geography(
+        self, killmail: Killmail, is_matching: bool
+    ) -> Tuple[bool, Optional[int], Optional[float]]:
         if (
             not killmail.solar_system_id
             or not self.origin_solar_system
@@ -716,7 +718,7 @@ class Tracker(models.Model):
             0
         ]
 
-        distance, jumps = self._calc_distances(solar_system)
+        jumps, distance = self._calc_distances(solar_system)
 
         if is_matching and self.exclude_high_sec:
             is_matching = not solar_system.is_high_sec
@@ -762,7 +764,9 @@ class Tracker(models.Model):
 
         return is_matching, jumps, distance
 
-    def _calc_distances(self, solar_system: EveSolarSystem):
+    def _calc_distances(
+        self, solar_system: EveSolarSystem
+    ) -> Tuple[Optional[int], Optional[float]]:
         if not self.origin_solar_system:
             return None, None
 
@@ -774,9 +778,9 @@ class Tracker(models.Model):
             # Currently all those exceptions are already captures in eveuniverse,
             # but this shall remain for when the workaround is fixed
             jumps = None
-        return distance, jumps
+        return (jumps, distance)
 
-    def _match_attackers(self, killmail, is_matching):
+    def _match_attackers(self, killmail: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_min_attackers:
             is_matching = len(killmail.attackers) >= self.require_min_attackers
 
@@ -838,7 +842,9 @@ class Tracker(models.Model):
 
         return is_matching
 
-    def _match_attacker_ships(self, killmail, is_matching, matching_ship_type_ids):
+    def _match_attacker_ships(
+        self, killmail: Killmail, is_matching: bool, matching_ship_type_ids: List[int]
+    ) -> Tuple[bool, List[int]]:
         if is_matching and self.require_attackers_ship_groups.exists():
             ship_types_matching_qs = EveType.objects.filter(
                 id__in=set(killmail.attackers_ship_type_ids())
@@ -869,7 +875,7 @@ class Tracker(models.Model):
 
         return is_matching, matching_ship_type_ids
 
-    def _match_victims(self, killmail, is_matching):
+    def _match_victims(self, killmail: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_victim_alliances.exists():
             is_matching = self.require_victim_alliances.filter(
                 alliance_id=killmail.victim.alliance_id
@@ -900,7 +906,9 @@ class Tracker(models.Model):
 
         return is_matching
 
-    def _match_victim_ship(self, killmail, is_matching, matching_ship_type_ids):
+    def _match_victim_ship(
+        self, killmail: Killmail, is_matching: bool, matching_ship_type_ids: List[int]
+    ) -> Tuple[bool, List[int]]:
         if is_matching and self.require_victim_ship_groups.exists():
             ship_types_matching_qs = EveType.objects.filter(
                 eve_group_id__in=list(
@@ -930,7 +938,7 @@ class Tracker(models.Model):
         return is_matching, matching_ship_type_ids
 
     @classmethod
-    def _killmail_main_attacker_org(cls, killmail) -> Optional[EntityCount]:
+    def _killmail_main_attacker_org(cls, killmail: Killmail) -> Optional[EntityCount]:
         """returns the main attacker group with count"""
         org_items = []
         for attacker in killmail.attackers:
