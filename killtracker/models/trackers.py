@@ -1,9 +1,9 @@
-"""Models for killtracker."""
+"""Tracker models for killtracker."""
 
 import json
 from copy import deepcopy
 from datetime import timedelta
-from typing import List, Optional, Set
+from typing import List, Optional
 
 import dhooks_lite
 from simple_mq import SimpleMQ
@@ -16,7 +16,6 @@ from django.utils.translation import gettext_lazy as _
 from eveuniverse.helpers import meters_to_ly
 from eveuniverse.models import (
     EveConstellation,
-    EveEntity,
     EveGroup,
     EveRegion,
     EveSolarSystem,
@@ -31,19 +30,14 @@ from app_utils.json import JSONDateTimeDecoder, JSONDateTimeEncoder
 from app_utils.logging import LoggerAddTag
 from app_utils.urls import static_file_absolute_url
 
-from . import APP_NAME, HOMEPAGE_URL, __title__, __version__
-from .app_settings import (
+from killtracker import APP_NAME, HOMEPAGE_URL, __title__, __version__
+from killtracker.app_settings import (
     KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER,
     KILLTRACKER_WEBHOOK_SET_AVATAR,
 )
-from .core.killmails import EntityCount, Killmail, TrackerInfo
-from .exceptions import WebhookTooManyRequests
-from .managers import (
-    EveKillmailManager,
-    EveTypePlusManager,
-    TrackerManager,
-    WebhookManager,
-)
+from killtracker.core.killmails import EntityCount, Killmail, TrackerInfo
+from killtracker.exceptions import WebhookTooManyRequests
+from killtracker.managers import EveTypePlusManager, TrackerManager, WebhookManager
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
@@ -58,310 +52,6 @@ class EveTypePlus(EveType):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.eve_group})"
-
-
-class _EveKillmailCharacter(models.Model):
-    """A character in a killmail for Eve Online. Can be both vitim and attacker."""
-
-    character = models.ForeignKey(
-        EveEntity,
-        on_delete=models.CASCADE,
-        default=None,
-        null=True,
-        blank=True,
-        related_name="+",
-    )
-    corporation = models.ForeignKey(
-        EveEntity,
-        on_delete=models.CASCADE,
-        default=None,
-        null=True,
-        blank=True,
-        related_name="+",
-    )
-    alliance = models.ForeignKey(
-        EveEntity,
-        on_delete=models.CASCADE,
-        default=None,
-        null=True,
-        blank=True,
-        related_name="+",
-    )
-    faction = models.ForeignKey(
-        EveEntity,
-        on_delete=models.CASCADE,
-        default=None,
-        null=True,
-        blank=True,
-        related_name="+",
-    )
-    ship_type = models.ForeignKey(
-        EveEntity,
-        on_delete=models.CASCADE,
-        default=None,
-        null=True,
-        blank=True,
-        related_name="+",
-    )
-
-    class Meta:
-        abstract = True
-
-    def entity_ids(self) -> Set[int]:
-        """IDs of all entity objects."""
-        ids = {
-            self.character_id,
-            self.corporation_id,
-            self.alliance_id,
-            self.faction_id,
-            self.ship_type_id,
-        }
-        ids.discard(None)
-        return ids
-
-
-class EveKillmail(_EveKillmailCharacter):
-    """A killmail in Eve Online."""
-
-    id = models.BigIntegerField(primary_key=True)
-    time = models.DateTimeField(default=None, null=True, blank=True, db_index=True)
-    solar_system = models.ForeignKey(
-        EveEntity, on_delete=models.CASCADE, default=None, null=True, blank=True
-    )
-    updated_at = models.DateTimeField(auto_now=True)
-    damage_taken = models.BigIntegerField(default=None, null=True, blank=True)
-    # position
-    position_x = models.FloatField(default=None, null=True, blank=True)
-    position_y = models.FloatField(default=None, null=True, blank=True)
-    position_z = models.FloatField(default=None, null=True, blank=True)
-    # zkb
-    location_id = models.PositiveIntegerField(
-        default=None, null=True, blank=True, db_index=True
-    )
-    hash = models.CharField(max_length=64, default="", blank=True)
-    fitted_value = models.FloatField(default=None, null=True, blank=True)
-    total_value = models.FloatField(default=None, null=True, blank=True, db_index=True)
-    zkb_points = models.PositiveIntegerField(
-        default=None, null=True, blank=True, db_index=True
-    )
-    is_npc = models.BooleanField(default=None, null=True, blank=True, db_index=True)
-    is_solo = models.BooleanField(default=None, null=True, blank=True, db_index=True)
-    is_awox = models.BooleanField(default=None, null=True, blank=True, db_index=True)
-
-    objects = EveKillmailManager()
-
-    def __str__(self):
-        return f"ID:{self.id}"
-
-    def __repr__(self):
-        return f"{type(self).__name__}(id={self.id})"
-
-    def load_entities(self):
-        """loads unknown entities for this killmail"""
-        qs = EveEntity.objects.filter(id__in=self.entity_ids(), name="")
-        qs.update_from_esi()
-
-    def entity_ids(self) -> Set[int]:
-        """IDs of all entity objects."""
-        ids = super().entity_ids() | {self.solar_system_id}
-        for attacker in self.attackers.all():
-            ids |= attacker.entity_ids()
-        ids.discard(None)
-        return ids
-
-
-class EveKillmailAttacker(_EveKillmailCharacter):
-    """An attacker on a killmail in Eve Online."""
-
-    killmail = models.ForeignKey(
-        EveKillmail, on_delete=models.CASCADE, related_name="attackers"
-    )
-    damage_done = models.BigIntegerField(default=None, null=True, blank=True)
-    is_final_blow = models.BooleanField(
-        default=None, null=True, blank=True, db_index=True
-    )
-    security_status = models.FloatField(default=None, null=True, blank=True)
-    weapon_type = models.ForeignKey(
-        EveEntity,
-        on_delete=models.CASCADE,
-        default=None,
-        null=True,
-        blank=True,
-        related_name="+",
-    )
-
-    def __str__(self) -> str:
-        if self.character:
-            return str(self.character)
-        if self.corporation:
-            return str(self.corporation)
-        if self.alliance:
-            return str(self.alliance)
-        if self.faction:
-            return str(self.faction)
-        return f"PK:{self.pk}"
-
-    def entity_ids(self) -> Set[int]:
-        """IDs of all entity objects."""
-        ids = super().entity_ids() | {self.weapon_type.id}
-        ids.discard(None)
-        return ids
-
-
-# class EveKillmail(models.Model): # outdated
-
-#     id = models.BigIntegerField(primary_key=True)
-#     time = models.DateTimeField(default=None, null=True, blank=True, db_index=True)
-#     solar_system = models.ForeignKey(
-#         EveEntity, on_delete=models.CASCADE, default=None, null=True, blank=True
-#     )
-#     updated_at = models.DateTimeField(auto_now=True)
-
-#     objects = EveKillmailManager()
-
-#     def __str__(self):
-#         return f"ID:{self.id}"
-
-#     def __repr__(self):
-#         return f"{type(self).__name__}(id={self.id})"
-
-#     def load_entities(self):
-#         """loads unknown entities for this killmail"""
-#         qs = EveEntity.objects.filter(id__in=self.entity_ids(), name="")
-#         qs.update_from_esi()
-
-#     def entity_ids(self) -> List[int]:
-#         ids = [
-#             self.victim.character_id,
-#             self.victim.corporation_id,
-#             self.victim.alliance_id,
-#             self.victim.ship_type_id,
-#             self.solar_system_id,
-#         ]
-#         for attacker in self.attackers.all():
-#             ids += [
-#                 attacker.character_id,
-#                 attacker.corporation_id,
-#                 attacker.alliance_id,
-#                 attacker.ship_type_id,
-#                 attacker.weapon_type_id,
-#             ]
-#         return [int(x) for x in ids if x is not None]
-
-
-# class EveKillmailCharacter(models.Model):  # outdated
-
-#     character = models.ForeignKey(
-#         EveEntity,
-#         on_delete=models.CASCADE,
-#         default=None,
-#         null=True,
-#         blank=True,
-#         related_name="+",
-#     )
-#     corporation = models.ForeignKey(
-#         EveEntity,
-#         on_delete=models.CASCADE,
-#         default=None,
-#         null=True,
-#         blank=True,
-#         related_name="+",
-#     )
-#     alliance = models.ForeignKey(
-#         EveEntity,
-#         on_delete=models.CASCADE,
-#         default=None,
-#         null=True,
-#         blank=True,
-#         related_name="+",
-#     )
-#     faction = models.ForeignKey(
-#         EveEntity,
-#         on_delete=models.CASCADE,
-#         default=None,
-#         null=True,
-#         blank=True,
-#         related_name="+",
-#     )
-#     ship_type = models.ForeignKey(
-#         EveEntity,
-#         on_delete=models.CASCADE,
-#         default=None,
-#         null=True,
-#         blank=True,
-#         related_name="+",
-#     )
-
-#     class Meta:
-#         abstract = True
-
-#     def __str__(self) -> str:
-#         if self.character:
-#             return str(self.character)
-#         elif self.corporation:
-#             return str(self.corporation)
-#         elif self.alliance:
-#             return str(self.alliance)
-#         elif self.faction:
-#             return str(self.faction)
-#         else:
-#             return f"PK:{self.pk}"
-
-
-# class EveKillmailVictim(EveKillmailCharacter):  # outdated
-
-#     killmail = models.OneToOneField(
-#         EveKillmail, primary_key=True, on_delete=models.CASCADE, related_name="victim"
-#     )
-#     damage_taken = models.BigIntegerField(default=None, null=True, blank=True)
-
-
-# class EveKillmailAttacker(EveKillmailCharacter): # outdated
-
-#     killmail = models.ForeignKey(
-#         EveKillmail, on_delete=models.CASCADE, related_name="attackers"
-#     )
-#     damage_done = models.BigIntegerField(default=None, null=True, blank=True)
-#     is_final_blow = models.BooleanField(
-#         default=None, null=True, blank=True, db_index=True
-#     )
-#     security_status = models.FloatField(default=None, null=True, blank=True)
-#     weapon_type = models.ForeignKey(
-#         EveEntity,
-#         on_delete=models.CASCADE,
-#         default=None,
-#         null=True,
-#         blank=True,
-#         related_name="+",
-#     )
-
-
-# class EveKillmailPosition(models.Model):  # outdated
-#     killmail = models.OneToOneField(
-#         EveKillmail, primary_key=True, on_delete=models.CASCADE, related_name="position"
-#     )
-#     x = models.FloatField(default=None, null=True, blank=True)
-#     y = models.FloatField(default=None, null=True, blank=True)
-#     z = models.FloatField(default=None, null=True, blank=True)
-
-
-# class EveKillmailZkb(models.Model):  # outdated
-
-#     killmail = models.OneToOneField(
-#         EveKillmail, primary_key=True, on_delete=models.CASCADE, related_name="zkb"
-#     )
-#     location_id = models.PositiveIntegerField(
-#         default=None, null=True, blank=True, db_index=True
-#     )
-#     hash = models.CharField(max_length=64, default="", blank=True)
-#     fitted_value = models.FloatField(default=None, null=True, blank=True)
-#     total_value = models.FloatField(default=None, null=True, blank=True, db_index=True)
-#     points = models.PositiveIntegerField(
-#         default=None, null=True, blank=True, db_index=True
-#     )
-#     is_npc = models.BooleanField(default=None, null=True, blank=True, db_index=True)
-#     is_solo = models.BooleanField(default=None, null=True, blank=True, db_index=True)
-#     is_awox = models.BooleanField(default=None, null=True, blank=True, db_index=True)
 
 
 class Webhook(models.Model):
@@ -1290,7 +980,7 @@ class Tracker(models.Model):
 
         returns new queue size
         """
-        from .core import discord_messages
+        from killtracker.core import discord_messages
 
         content = discord_messages.create_content(self, intro_text)
         embed = discord_messages.create_embed(self, killmail)

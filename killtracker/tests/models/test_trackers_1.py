@@ -22,15 +22,15 @@ from app_utils.testing import NoSocketsTestCase, add_character_to_user_2
 from killtracker.core.killmails import EntityCount, Killmail
 from killtracker.models import Tracker
 
-from .testdata.factories import (
+from ..testdata.factories import (
     KillmailAttackerFactory,
     KillmailFactory,
     KillmailVictimFactory,
     TrackerFactory,
 )
-from .testdata.helpers import LoadTestDataMixin, load_killmail
+from ..testdata.helpers import LoadTestDataMixin, load_killmail
 
-MODULE_PATH = "killtracker.models"
+MODULE_PATH = "killtracker.models.trackers"
 
 
 def esi_get_route_origin_destination(origin, destination, **kwargs) -> list:
