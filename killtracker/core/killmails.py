@@ -363,73 +363,20 @@ class Killmail(_KillmailBase):
         cache.set(key=cache_key, value=killmail.asjson())
         return killmail
 
-    @staticmethod
-    def _create_from_dict(package_data: dict) -> "Killmail":
+    @classmethod
+    def _create_from_dict(cls, package_data: dict) -> "Killmail":
         """creates a new object from given dict.
         Needs to confirm with data structure returned from ZKB RedisQ
         """
-        zkb = KillmailZkb()
-        if "zkb" in package_data:
-            zkb_data = package_data["zkb"]
-            args = {}
-            for prop, mapping in (
-                ("locationID", "location_id"),
-                ("hash", None),
-                ("fittedValue", "fitted_value"),
-                ("totalValue", "total_value"),
-                ("points", None),
-                ("npc", "is_npc"),
-                ("solo", "is_solo"),
-                ("awox", "is_awox"),
-            ):
-                if prop in zkb_data:
-                    if mapping:
-                        args[mapping] = zkb_data[prop]
-                    else:
-                        args[prop] = zkb_data[prop]
-
-            zkb = KillmailZkb(**args)
 
         killmail = None
         if "killmail" in package_data:
-            victim = KillmailVictim()
-            position = KillmailPosition()
-            attackers = []
             killmail_data = package_data["killmail"]
-            if "victim" in killmail_data:
-                victim_data = killmail_data["victim"]
-                args = {}
-                for prop in KillmailVictim.ENTITY_PROPS + ["damage_taken"]:
-                    if prop in victim_data:
-                        args[prop] = victim_data[prop]
+            victim, position = cls._extract_victim_and_position(killmail_data)
+            attackers = cls._extract_attackers(killmail_data)
+            zkb = cls._extract_zkb(package_data)
 
-                victim = KillmailVictim(**args)
-
-                if "position" in victim_data:
-                    position_data = victim_data["position"]
-                    args = {}
-                    for prop in ["x", "y", "z"]:
-                        if prop in position_data:
-                            args[prop] = position_data[prop]
-
-                    position = KillmailPosition(**args)
-
-            if "attackers" in killmail_data:
-                for attacker_data in killmail_data["attackers"]:
-                    args = {}
-                    for prop in KillmailAttacker.ENTITY_PROPS + [
-                        "damage_done",
-                        "security_status",
-                    ]:
-                        if prop in attacker_data:
-                            args[prop] = attacker_data[prop]
-
-                    if "final_blow" in attacker_data:
-                        args["is_final_blow"] = attacker_data["final_blow"]
-
-                    attackers.append(KillmailAttacker(**args))
-
-            args = {
+            params = {
                 "id": killmail_data["killmail_id"],
                 "time": parse_datetime(killmail_data["killmail_time"]),
                 "victim": victim,
@@ -438,11 +385,78 @@ class Killmail(_KillmailBase):
                 "zkb": zkb,
             }
             if "solar_system_id" in killmail_data:
-                args["solar_system_id"] = killmail_data["solar_system_id"]
+                params["solar_system_id"] = killmail_data["solar_system_id"]
 
-            killmail = Killmail(**args)
+            killmail = Killmail(**params)
 
         return killmail
+
+    @classmethod
+    def _extract_victim_and_position(cls, killmail_data: dict):
+        victim = KillmailVictim()
+        position = KillmailPosition()
+        if "victim" in killmail_data:
+            victim_data = killmail_data["victim"]
+            params = {}
+            for prop in KillmailVictim.ENTITY_PROPS + ["damage_taken"]:
+                if prop in victim_data:
+                    params[prop] = victim_data[prop]
+
+            victim = KillmailVictim(**params)
+
+            if "position" in victim_data:
+                position_data = victim_data["position"]
+                params = {}
+                for prop in ["x", "y", "z"]:
+                    if prop in position_data:
+                        params[prop] = position_data[prop]
+
+                position = KillmailPosition(**params)
+
+        return victim, position
+
+    @classmethod
+    def _extract_attackers(cls, killmail_data: dict) -> List[KillmailAttacker]:
+        attackers = []
+        for attacker_data in killmail_data.get("attackers", []):
+            params = {}
+            for prop in KillmailAttacker.ENTITY_PROPS + [
+                "damage_done",
+                "security_status",
+            ]:
+                if prop in attacker_data:
+                    params[prop] = attacker_data[prop]
+
+            if "final_blow" in attacker_data:
+                params["is_final_blow"] = attacker_data["final_blow"]
+
+            attackers.append(KillmailAttacker(**params))
+        return attackers
+
+    @classmethod
+    def _extract_zkb(cls, package_data):
+        if "zkb" not in package_data:
+            return KillmailZkb()
+
+        zkb_data = package_data["zkb"]
+        params = {}
+        for prop, mapping in (
+            ("locationID", "location_id"),
+            ("hash", None),
+            ("fittedValue", "fitted_value"),
+            ("totalValue", "total_value"),
+            ("points", None),
+            ("npc", "is_npc"),
+            ("solo", "is_solo"),
+            ("awox", "is_awox"),
+        ):
+            if prop in zkb_data:
+                if mapping:
+                    params[mapping] = zkb_data[prop]
+                else:
+                    params[prop] = zkb_data[prop]
+
+        return KillmailZkb(**params)
 
     @staticmethod
     def lock_key() -> str:

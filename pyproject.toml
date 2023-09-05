@@ -73,4 +73,5 @@ disable = [
     "too-few-public-methods",
     "import-outside-toplevel",
     "imported-auth-user",
+    "too-many-instance-attributes",
 ]
