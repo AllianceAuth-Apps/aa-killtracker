@@ -16,6 +16,7 @@ from simplejson.errors import JSONDecodeError
 from django.conf import settings
 from django.core.cache import cache
 from django.utils.dateparse import parse_datetime
+from eveuniverse.models import EveType
 
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.allianceauth import get_redis_client
@@ -230,6 +231,49 @@ class Killmail(_KillmailBase):
     def delete(self) -> None:
         """Delete this killmail from temporary storage."""
         cache.delete(self._storage_key(self.id))
+
+    def calc_main_attacker_ship_group(
+        self,
+        minimum_count: int,
+        minimum_share: float,
+    ) -> Optional[EntityCount]:
+        """Return the main attacker group with count."""
+
+        ships_type_ids = self.attackers_ship_type_ids()
+        ship_types = EveType.objects.filter(id__in=ships_type_ids).select_related(
+            "eve_group"
+        )
+        ship_groups = []
+        for ships_type_id in ships_type_ids:
+            try:
+                ship_type = ship_types.get(id=ships_type_id)
+            except EveType.DoesNotExist:
+                continue
+
+            ship_groups.append(
+                EntityCount(
+                    id=ship_type.eve_group_id,  # type: ignore
+                    category=EntityCount.CATEGORY_INVENTORY_GROUP,
+                    name=ship_type.eve_group.name,
+                )
+            )
+
+        if ship_groups:
+            ship_groups_2 = [
+                EntityCount(
+                    id=x.id,
+                    category=x.category,
+                    name=x.name,
+                    count=ship_groups.count(x),
+                )
+                for x in set(ship_groups)
+            ]
+            max_count = max(x.count or 0 for x in ship_groups_2)
+            threshold = max(len(self.attackers) * minimum_share, minimum_count)
+            if max_count >= threshold:
+                return sorted(ship_groups_2, key=lambda x: x.count or 0).pop()
+
+        return None
 
     @classmethod
     def get(cls, id: int) -> "Killmail":

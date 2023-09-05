@@ -684,12 +684,15 @@ class Tracker(models.Model):
 
         if is_matching:
             killmail_new = deepcopy(killmail)
+            main_ship_group = killmail.calc_main_attacker_ship_group(
+                self.MAIN_MINIMUM_COUNT, self.MAIN_MINIMUM_SHARE
+            )
             killmail_new.tracker_info = TrackerInfo(
                 tracker_pk=self.pk,
                 jumps=jumps,
                 distance=distance,
                 main_org=self._killmail_main_attacker_org(killmail),
-                main_ship_group=self._killmail_main_attacker_ship_group(killmail),
+                main_ship_group=main_ship_group,
                 matching_ship_type_ids=matching_ship_type_ids,
             )
             return killmail_new
@@ -959,51 +962,6 @@ class Tracker(models.Model):
                         return org_items_4[0]
 
                 return org_items_3[0]
-
-        return None
-
-    @classmethod
-    def _killmail_main_attacker_ship_group(
-        cls, killmail: Killmail
-    ) -> Optional[EntityCount]:
-        """returns the main attacker group with count"""
-
-        ships_type_ids = killmail.attackers_ship_type_ids()
-        ship_types = EveType.objects.filter(id__in=ships_type_ids).select_related(
-            "eve_group"
-        )
-        ship_groups = []
-        for ships_type_id in ships_type_ids:
-            try:
-                ship_type = ship_types.get(id=ships_type_id)
-            except EveType.DoesNotExist:
-                continue
-
-            ship_groups.append(
-                EntityCount(
-                    id=ship_type.eve_group_id,  # type: ignore
-                    category=EntityCount.CATEGORY_INVENTORY_GROUP,
-                    name=ship_type.eve_group.name,
-                )
-            )
-
-        if ship_groups:
-            ship_groups_2 = [
-                EntityCount(
-                    id=x.id,
-                    category=x.category,
-                    name=x.name,
-                    count=ship_groups.count(x),
-                )
-                for x in set(ship_groups)
-            ]
-            max_count = max(x.count or 0 for x in ship_groups_2)
-            threshold = max(
-                len(killmail.attackers) * cls.MAIN_MINIMUM_SHARE,
-                cls.MAIN_MINIMUM_COUNT,
-            )
-            if max_count >= threshold:
-                return sorted(ship_groups_2, key=lambda x: x.count or 0).pop()
 
         return None
 
