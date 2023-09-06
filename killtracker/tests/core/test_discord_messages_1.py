@@ -34,10 +34,40 @@ class TestCreateEmbed(NoSocketsTestCase):
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
 
-    def test_should_create_embed_without_victim_character(self):
+    def test_should_create_embed_without_victim_alliance(self):
         # given
         tracker = TrackerFactory()
-        killmail = KillmailFactory(victim__character_id=None)
+        killmail = KillmailFactory(victim__alliance_id=None)
+        # when
+        embed = discord_messages.create_embed(tracker, killmail)
+        # then
+        self.assertIsInstance(embed, dhooks_lite.Embed)
+
+    def test_should_create_embed_without_victim_alliance_and_corporation(self):
+        # given
+        tracker = TrackerFactory()
+        killmail = KillmailFactory(
+            victim__alliance_id=None, victim__corporation_id=None
+        )
+        # when
+        embed = discord_messages.create_embed(tracker, killmail)
+        # then
+        self.assertIsInstance(embed, dhooks_lite.Embed)
+
+    def test_should_create_embed_without_final_attacker(self):
+        # given
+        tracker = TrackerFactory()
+        killmail = KillmailFactory()
+        killmail.attackers.remove(killmail.attacker_final_blow())
+        # when
+        embed = discord_messages.create_embed(tracker, killmail)
+        # then
+        self.assertIsInstance(embed, dhooks_lite.Embed)
+
+    def test_should_create_embed_with_tracker_info(self):
+        # given
+        tracker = TrackerFactory()
+        killmail = KillmailFactory()
         # when
         embed = discord_messages.create_embed(tracker, killmail)
         # then

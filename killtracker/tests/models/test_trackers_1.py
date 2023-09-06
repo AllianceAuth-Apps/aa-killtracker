@@ -408,7 +408,7 @@ class TestTrackerCalculate2(LoadTestDataMixin, NoSocketsTestCase):
         self.assertIsNotNone(result)
 
     def test_should_deny_with_require_attacker_corporations(self):
-        attacker = KillmailAttackerFactory(alliance_id=2010)
+        attacker = KillmailAttackerFactory(corporation_id=2001)
         killmail = KillmailFactory(attackers=[attacker])
         tracker = TrackerFactory(webhook=self.webhook_1)
         tracker.require_attacker_corporations.add(
