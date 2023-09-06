@@ -39,7 +39,6 @@ Home = "https://gitlab.com/ErikKalkoken/aa-killtracker"
 [tool.flit.module]
 name = "killtracker"
 
-
 [tool.isort]
 profile = "black"
 multi_line_output = 3
