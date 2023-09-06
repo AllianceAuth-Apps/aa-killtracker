@@ -274,9 +274,6 @@ class Webhook(models.Model):
 class Tracker(models.Model):
     """A tracker for killmails."""
 
-    MAIN_MINIMUM_COUNT = 2
-    MAIN_MINIMUM_SHARE = 0.25
-
     class ChannelPingType(models.TextChoices):
         """A channel ping type."""
 
@@ -674,8 +671,6 @@ class Tracker(models.Model):
             tracker_pk=self.pk,
             jumps=jumps,
             distance=distance,
-            minimum_count=self.MAIN_MINIMUM_COUNT,
-            minimum_share=self.MAIN_MINIMUM_SHARE,
             matching_ship_type_ids=matching_ship_type_ids,
         )
         return killmail_new

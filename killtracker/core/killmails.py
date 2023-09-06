@@ -40,6 +40,9 @@ ZKB_API_URL = "https://zkillboard.com/api/"
 ZKB_KILLMAIL_BASEURL = "https://zkillboard.com/kill/"
 REQUESTS_TIMEOUT = (5, 30)
 
+MAIN_MINIMUM_COUNT = 2
+MAIN_MINIMUM_SHARE = 0.25
+
 
 @dataclass
 class _KillmailBase:
@@ -236,11 +239,11 @@ class Killmail(_KillmailBase):
     def clone_with_tracker_info(
         self,
         tracker_pk,
-        jumps: int,
-        distance: float,
-        minimum_count: int,
-        minimum_share: float,
-        matching_ship_type_ids: List[int],
+        jumps: Optional[int] = None,
+        distance: Optional[float] = None,
+        matching_ship_type_ids: Optional[List[int]] = None,
+        minimum_count: int = MAIN_MINIMUM_COUNT,
+        minimum_share: float = MAIN_MINIMUM_SHARE,
     ) -> "Killmail":
         """Clone this killmail and add tracker info."""
         main_ship_group = self._calc_main_attacker_ship_group(

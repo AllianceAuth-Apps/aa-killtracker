@@ -88,7 +88,7 @@ def _extract_weapon_type_ids() -> Set[int]:
     return type_ids
 
 
-_eve_entity_ids = {
+_existing_eve_entity_ids = {
     EveEntityVariant.ALLIANCE: _extract_eve_entity_ids(EveEntityVariant.ALLIANCE),
     EveEntityVariant.CHARACTER: _extract_eve_entity_ids(EveEntityVariant.CHARACTER),
     EveEntityVariant.CORPORATION: _extract_eve_entity_ids(EveEntityVariant.CORPORATION),
@@ -97,10 +97,11 @@ _eve_entity_ids = {
     EveEntityVariant.SHIP_TYPE: _extract_ship_type_ids(),
     EveEntityVariant.WEAPON_TYPE: _extract_weapon_type_ids(),
 }
+"""Eve Entity IDs which exist as fixtures."""
 
 
 def random_eve_entity(variant: EveEntityVariant):
-    ids = _eve_entity_ids[variant]
+    ids = _existing_eve_entity_ids[variant]
     entity_id = factory.fuzzy.FuzzyChoice(ids).fuzz()
     return EveEntity.objects.get(id=entity_id)
 
@@ -117,15 +118,19 @@ class KillmailCharacterFactory(
         model = _KillmailCharacter
 
     character_id = factory.fuzzy.FuzzyChoice(
-        _eve_entity_ids[EveEntityVariant.CHARACTER]
+        _existing_eve_entity_ids[EveEntityVariant.CHARACTER]
     )
     corporation_id = factory.fuzzy.FuzzyChoice(
-        _eve_entity_ids[EveEntityVariant.CORPORATION]
+        _existing_eve_entity_ids[EveEntityVariant.CORPORATION]
     )
-    alliance_id = factory.fuzzy.FuzzyChoice(_eve_entity_ids[EveEntityVariant.ALLIANCE])
-    faction_id = factory.fuzzy.FuzzyChoice(_eve_entity_ids[EveEntityVariant.FACTION])
+    alliance_id = factory.fuzzy.FuzzyChoice(
+        _existing_eve_entity_ids[EveEntityVariant.ALLIANCE]
+    )
+    faction_id = factory.fuzzy.FuzzyChoice(
+        _existing_eve_entity_ids[EveEntityVariant.FACTION]
+    )
     ship_type_id = factory.fuzzy.FuzzyChoice(
-        _eve_entity_ids[EveEntityVariant.SHIP_TYPE]
+        _existing_eve_entity_ids[EveEntityVariant.SHIP_TYPE]
     )
 
 
@@ -147,7 +152,7 @@ class KillmailAttackerFactory(
     damage_done = factory.fuzzy.FuzzyInteger(1_000_000)
     security_status = factory.fuzzy.FuzzyFloat(-10.0, 5)
     weapon_type_id = factory.fuzzy.FuzzyChoice(
-        _eve_entity_ids[EveEntityVariant.WEAPON_TYPE]
+        _existing_eve_entity_ids[EveEntityVariant.WEAPON_TYPE]
     )
 
 
@@ -189,7 +194,7 @@ class KillmailFactory(factory.Factory, metaclass=BaseMetaFactory[Killmail]):
     position = factory.SubFactory(KillmailPositionFactory)
     zkb = factory.SubFactory(KillmailZkbFactory)
     solar_system_id = factory.fuzzy.FuzzyChoice(
-        _eve_entity_ids[EveEntityVariant.SOLAR_SYSTEM]
+        _existing_eve_entity_ids[EveEntityVariant.SOLAR_SYSTEM]
     )
 
     @factory.lazy_attribute

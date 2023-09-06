@@ -4,7 +4,12 @@ from app_utils.testing import NoSocketsTestCase
 
 from killtracker.core import discord_messages
 
-from ..testdata.factories import KillmailFactory, TrackerFactory
+from ..testdata.factories import (
+    EveEntityVariant,
+    KillmailFactory,
+    TrackerFactory,
+    random_eve_entity,
+)
 from ..testdata.helpers import load_eve_entities
 from ..testdata.load_eveuniverse import load_eveuniverse
 
@@ -64,10 +69,22 @@ class TestCreateEmbed(NoSocketsTestCase):
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
 
-    def test_should_create_embed_with_tracker_info(self):
+    def test_should_create_embed_with_minimum_tracker_info(self):
         # given
         tracker = TrackerFactory()
-        killmail = KillmailFactory()
+        killmail = KillmailFactory().clone_with_tracker_info(tracker.pk)
+        # when
+        embed = discord_messages.create_embed(tracker, killmail)
+        # then
+        self.assertIsInstance(embed, dhooks_lite.Embed)
+
+    def test_should_create_embed_with_full_tracker_info(self):
+        # given
+        tracker = TrackerFactory()
+        ship_type = random_eve_entity(EveEntityVariant.SHIP_TYPE)
+        killmail = KillmailFactory().clone_with_tracker_info(
+            tracker.pk, jumps=3, distance=3.5, matching_ship_type_ids=[ship_type.id]
+        )
         # when
         embed = discord_messages.create_embed(tracker, killmail)
         # then
