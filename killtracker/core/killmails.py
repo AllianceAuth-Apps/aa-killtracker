@@ -109,7 +109,7 @@ class KillmailZkb(_KillmailBase):
 
 
 @dataclass(eq=True, frozen=True)
-class EntityCount:
+class _EntityCount:
     """Counts of an Eve entity."""
 
     CATEGORY_ALLIANCE = "alliance"
@@ -139,8 +139,8 @@ class TrackerInfo(_KillmailBase):
     tracker_pk: int
     jumps: Optional[int] = None
     distance: Optional[float] = None
-    main_org: Optional[EntityCount] = None
-    main_ship_group: Optional[EntityCount] = None
+    main_org: Optional[_EntityCount] = None
+    main_ship_group: Optional[_EntityCount] = None
     matching_ship_type_ids: Optional[List[int]] = None
 
 
@@ -262,7 +262,7 @@ class Killmail(_KillmailBase):
         self,
         minimum_count: int,
         minimum_share: float,
-    ) -> Optional[EntityCount]:
+    ) -> Optional[_EntityCount]:
         """Return the main attacker group with count."""
 
         ships_type_ids = self.attackers_ship_type_ids()
@@ -277,16 +277,16 @@ class Killmail(_KillmailBase):
                 continue
 
             ship_groups.append(
-                EntityCount(
+                _EntityCount(
                     id=ship_type.eve_group_id,  # type: ignore
-                    category=EntityCount.CATEGORY_INVENTORY_GROUP,
+                    category=_EntityCount.CATEGORY_INVENTORY_GROUP,
                     name=ship_type.eve_group.name,
                 )
             )
 
         if ship_groups:
             ship_groups_2 = [
-                EntityCount(
+                _EntityCount(
                     id=x.id,
                     category=x.category,
                     name=x.name,
@@ -305,28 +305,28 @@ class Killmail(_KillmailBase):
         self,
         minimum_count: int,
         minimum_share: float,
-    ) -> Optional[EntityCount]:
+    ) -> Optional[_EntityCount]:
         """Return the main attacker group with count."""
         org_items = []
         for attacker in self.attackers:
             if attacker.alliance_id:
                 org_items.append(
-                    EntityCount(
-                        id=attacker.alliance_id, category=EntityCount.CATEGORY_ALLIANCE
+                    _EntityCount(
+                        id=attacker.alliance_id, category=_EntityCount.CATEGORY_ALLIANCE
                     )
                 )
 
             if attacker.corporation_id:
                 org_items.append(
-                    EntityCount(
+                    _EntityCount(
                         id=attacker.corporation_id,
-                        category=EntityCount.CATEGORY_CORPORATION,
+                        category=_EntityCount.CATEGORY_CORPORATION,
                     )
                 )
 
         if org_items:
             org_items_2 = [
-                EntityCount(
+                _EntityCount(
                     id=obj.id, category=obj.category, count=org_items.count(obj)
                 )
                 for obj in set(org_items)

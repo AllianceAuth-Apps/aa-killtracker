@@ -19,7 +19,7 @@ from allianceauth.tests.auth_utils import AuthUtils
 from app_utils.esi_testing import BravadoOperationStub
 from app_utils.testing import NoSocketsTestCase, add_character_to_user_2
 
-from killtracker.core.killmails import EntityCount, Killmail
+from killtracker.core.killmails import Killmail, _EntityCount
 from killtracker.models import Tracker
 
 from ..testdata.factories import (
@@ -546,13 +546,13 @@ class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
         self.assertAlmostEqual(killmail.tracker_info.distance, 5.85, delta=0.01)
         self.assertEqual(
             killmail.tracker_info.main_org,
-            EntityCount(id=3001, category=EntityCount.CATEGORY_ALLIANCE, count=3),
+            _EntityCount(id=3001, category=_EntityCount.CATEGORY_ALLIANCE, count=3),
         )
         self.assertEqual(
             killmail.tracker_info.main_ship_group,
-            EntityCount(
+            _EntityCount(
                 id=419,
-                category=EntityCount.CATEGORY_INVENTORY_GROUP,
+                category=_EntityCount.CATEGORY_INVENTORY_GROUP,
                 name="Combat Battlecruiser",
                 count=2,
             ),
@@ -562,14 +562,14 @@ class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
         killmail = self.tracker.process_killmail(load_killmail(10000403))
         self.assertEqual(
             killmail.tracker_info.main_org,
-            EntityCount(id=2001, category=EntityCount.CATEGORY_CORPORATION, count=2),
+            _EntityCount(id=2001, category=_EntityCount.CATEGORY_CORPORATION, count=2),
         )
 
     def test_main_org_prioritize_alliance_over_corporation(self, mock_jumps_to):
         killmail = self.tracker.process_killmail(load_killmail(10000401))
         self.assertEqual(
             killmail.tracker_info.main_org,
-            EntityCount(id=3001, category=EntityCount.CATEGORY_ALLIANCE, count=2),
+            _EntityCount(id=3001, category=_EntityCount.CATEGORY_ALLIANCE, count=2),
         )
 
     def test_main_org_is_none_if_only_one_attacker(self, mock_jumps_to):
@@ -584,7 +584,7 @@ class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
         killmail = self.tracker.process_killmail(load_killmail(10006001))
         self.assertEqual(
             killmail.tracker_info.main_ship_group,
-            EntityCount(
+            _EntityCount(
                 id=419, category="inventory_group", name="Combat Battlecruiser", count=2
             ),
         )
@@ -597,7 +597,7 @@ class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
         killmail = self.tracker.process_killmail(load_killmail(10006003))
         self.assertEqual(
             killmail.tracker_info.main_org,
-            EntityCount(id=2001, category="corporation", count=2),
+            _EntityCount(id=2001, category="corporation", count=2),
         )
 
     def test_main_org_return_none_if_below_threshold(self, mock_jumps_to):
