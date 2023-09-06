@@ -11,12 +11,13 @@ from allianceauth.tests.auth_utils import AuthUtils
 from killtracker.core.killmails import Killmail
 from killtracker.models import EveKillmail, Webhook
 
-from . import _currentdir
-from .load_eveuniverse import load_eveuniverse  # noqa  pylint: disable=W0611
+from . import _current_dir
+from .load_eveuniverse import load_eveuniverse
 
 
 def _load_json_from_file(filename: str) -> dict:
-    with open(f"{_currentdir}/{filename}.json", "r", encoding="utf-8") as f:
+    path = _current_dir / f"{filename}.json"
+    with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
 
     return data
