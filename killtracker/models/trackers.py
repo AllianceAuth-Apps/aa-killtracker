@@ -1,7 +1,6 @@
 """Tracker models for killtracker."""
 
 import json
-from copy import deepcopy
 from datetime import timedelta
 from typing import List, Optional, Tuple
 
@@ -35,7 +34,7 @@ from killtracker.app_settings import (
     KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER,
     KILLTRACKER_WEBHOOK_SET_AVATAR,
 )
-from killtracker.core.killmails import Killmail, TrackerInfo
+from killtracker.core.killmails import Killmail
 from killtracker.exceptions import WebhookTooManyRequests
 from killtracker.managers import EveTypePlusManager, TrackerManager, WebhookManager
 
@@ -671,19 +670,12 @@ class Tracker(models.Model):
         if not is_matching:
             return None
 
-        killmail_new = deepcopy(killmail)
-        main_ship_group = killmail.calc_main_attacker_ship_group(
-            self.MAIN_MINIMUM_COUNT, self.MAIN_MINIMUM_SHARE
-        )
-        main_org = killmail.calc_main_attacker_org(
-            self.MAIN_MINIMUM_COUNT, self.MAIN_MINIMUM_SHARE
-        )
-        killmail_new.tracker_info = TrackerInfo(
+        killmail_new = killmail.clone_with_tracker_info(
             tracker_pk=self.pk,
             jumps=jumps,
             distance=distance,
-            main_org=main_org,
-            main_ship_group=main_ship_group,
+            minimum_count=self.MAIN_MINIMUM_COUNT,
+            minimum_share=self.MAIN_MINIMUM_SHARE,
             matching_ship_type_ids=matching_ship_type_ids,
         )
         return killmail_new

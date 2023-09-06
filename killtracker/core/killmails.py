@@ -3,6 +3,7 @@
 # pylint: disable = redefined-builtin
 
 import json
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from http import HTTPStatus
@@ -232,7 +233,32 @@ class Killmail(_KillmailBase):
         """Delete this killmail from temporary storage."""
         cache.delete(self._storage_key(self.id))
 
-    def calc_main_attacker_ship_group(
+    def clone_with_tracker_info(
+        self,
+        tracker_pk,
+        jumps: int,
+        distance: float,
+        minimum_count: int,
+        minimum_share: float,
+        matching_ship_type_ids: List[int],
+    ) -> "Killmail":
+        """Clone this killmail and add tracker info."""
+        main_ship_group = self._calc_main_attacker_ship_group(
+            minimum_count, minimum_share
+        )
+        main_org = self._calc_main_attacker_org(minimum_count, minimum_share)
+        killmail_new = deepcopy(self)
+        killmail_new.tracker_info = TrackerInfo(
+            tracker_pk=tracker_pk,
+            jumps=jumps,
+            distance=distance,
+            main_org=main_org,
+            main_ship_group=main_ship_group,
+            matching_ship_type_ids=matching_ship_type_ids,
+        )
+        return killmail_new
+
+    def _calc_main_attacker_ship_group(
         self,
         minimum_count: int,
         minimum_share: float,
@@ -275,7 +301,7 @@ class Killmail(_KillmailBase):
 
         return None
 
-    def calc_main_attacker_org(
+    def _calc_main_attacker_org(
         self,
         minimum_count: int,
         minimum_share: float,
