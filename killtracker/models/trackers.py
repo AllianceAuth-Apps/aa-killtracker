@@ -35,7 +35,7 @@ from killtracker.app_settings import (
     KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER,
     KILLTRACKER_WEBHOOK_SET_AVATAR,
 )
-from killtracker.core.killmails import EntityCount, Killmail, TrackerInfo
+from killtracker.core.killmails import Killmail, TrackerInfo
 from killtracker.exceptions import WebhookTooManyRequests
 from killtracker.managers import EveTypePlusManager, TrackerManager, WebhookManager
 
@@ -675,11 +675,14 @@ class Tracker(models.Model):
         main_ship_group = killmail.calc_main_attacker_ship_group(
             self.MAIN_MINIMUM_COUNT, self.MAIN_MINIMUM_SHARE
         )
+        main_org = killmail.calc_main_attacker_org(
+            self.MAIN_MINIMUM_COUNT, self.MAIN_MINIMUM_SHARE
+        )
         killmail_new.tracker_info = TrackerInfo(
             tracker_pk=self.pk,
             jumps=jumps,
             distance=distance,
-            main_org=self._killmail_main_attacker_org(killmail),
+            main_org=main_org,
             main_ship_group=main_ship_group,
             matching_ship_type_ids=matching_ship_type_ids,
         )
@@ -936,49 +939,6 @@ class Tracker(models.Model):
                 )
 
         return is_matching, matching_ship_type_ids
-
-    @classmethod
-    def _killmail_main_attacker_org(cls, killmail: Killmail) -> Optional[EntityCount]:
-        """returns the main attacker group with count"""
-        org_items = []
-        for attacker in killmail.attackers:
-            if attacker.alliance_id:
-                org_items.append(
-                    EntityCount(
-                        id=attacker.alliance_id, category=EntityCount.CATEGORY_ALLIANCE
-                    )
-                )
-
-            if attacker.corporation_id:
-                org_items.append(
-                    EntityCount(
-                        id=attacker.corporation_id,
-                        category=EntityCount.CATEGORY_CORPORATION,
-                    )
-                )
-
-        if org_items:
-            org_items_2 = [
-                EntityCount(
-                    id=obj.id, category=obj.category, count=org_items.count(obj)
-                )
-                for obj in set(org_items)
-            ]
-            max_count = max(x.count or 0 for x in org_items_2)
-            threshold = max(
-                len(killmail.attackers) * cls.MAIN_MINIMUM_SHARE,
-                cls.MAIN_MINIMUM_COUNT,
-            )
-            if max_count >= threshold:
-                org_items_3 = [x for x in org_items_2 if x.count == max_count]
-                if len(org_items_3) > 1:
-                    org_items_4 = [x for x in org_items_3 if x.is_alliance]
-                    if len(org_items_4) > 0:
-                        return org_items_4[0]
-
-                return org_items_3[0]
-
-        return None
 
     def generate_killmail_message(
         self, killmail: Killmail, intro_text: Optional[str] = None

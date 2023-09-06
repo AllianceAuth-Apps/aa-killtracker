@@ -275,6 +275,49 @@ class Killmail(_KillmailBase):
 
         return None
 
+    def calc_main_attacker_org(
+        self,
+        minimum_count: int,
+        minimum_share: float,
+    ) -> Optional[EntityCount]:
+        """Return the main attacker group with count."""
+        org_items = []
+        for attacker in self.attackers:
+            if attacker.alliance_id:
+                org_items.append(
+                    EntityCount(
+                        id=attacker.alliance_id, category=EntityCount.CATEGORY_ALLIANCE
+                    )
+                )
+
+            if attacker.corporation_id:
+                org_items.append(
+                    EntityCount(
+                        id=attacker.corporation_id,
+                        category=EntityCount.CATEGORY_CORPORATION,
+                    )
+                )
+
+        if org_items:
+            org_items_2 = [
+                EntityCount(
+                    id=obj.id, category=obj.category, count=org_items.count(obj)
+                )
+                for obj in set(org_items)
+            ]
+            max_count = max(x.count or 0 for x in org_items_2)
+            threshold = max(len(self.attackers) * minimum_share, minimum_count)
+            if max_count >= threshold:
+                org_items_3 = [x for x in org_items_2 if x.count == max_count]
+                if len(org_items_3) > 1:
+                    org_items_4 = [x for x in org_items_3 if x.is_alliance]
+                    if len(org_items_4) > 0:
+                        return org_items_4[0]
+
+                return org_items_3[0]
+
+        return None
+
     @classmethod
     def get(cls, id: int) -> "Killmail":
         """Fetch a killmail from temporary storage."""
