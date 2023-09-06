@@ -2,8 +2,8 @@
 from django.core.exceptions import ValidationError
 from django.contrib.admin.sites import AdminSite
 
-from ..admin import TrackerAdmin
-from ..models import Tracker, Webhook
+from killtracker.admin import TrackerAdmin
+from killtracker.models import Tracker, Webhook
 from app_utils.testing import NoSocketsTestCase
 
 

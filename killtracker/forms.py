@@ -1,3 +1,7 @@
+"""Forms for killtracker."""
+
+# pylint: disable = missing-class-docstring
+
 from django import forms
 from django.core.exceptions import ValidationError
 from django.forms.widgets import TextInput
@@ -7,6 +11,7 @@ from .models import Tracker
 
 
 def field_nice_display(name: str) -> str:
+    """Return field name in a nicely formatted format for output."""
     return name.replace("_", " ").capitalize()
 
 

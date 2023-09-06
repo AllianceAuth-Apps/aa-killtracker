@@ -1,3 +1,8 @@
+"""Admin site for killtracker."""
+
+# pylint: disable = missing-class-docstring, missing-function-docstring
+
+
 from django.contrib import admin
 from django.db.models import Q
 from django.db.models.functions import Lower
@@ -270,7 +275,7 @@ class TrackerAdmin(admin.ModelAdmin):
         return sorted(parts, key=str.casefold) if parts else None
 
     def _clauses(self, obj):
-        clauses = list()
+        clauses = []
         for field, func in [
             ("origin_solar_system", self._add_to_clauses_1),
             ("require_max_jumps", self._add_to_clauses_1),

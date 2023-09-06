@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from ..exceptions import WebhookTooManyRequests
+from killtracker.exceptions import WebhookTooManyRequests
 
 
 class TestExceptions(TestCase):

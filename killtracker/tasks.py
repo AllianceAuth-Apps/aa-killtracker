@@ -1,3 +1,5 @@
+"""Tasks for killtracker."""
+
 from celery import chain, shared_task
 
 from django.db import IntegrityError
@@ -131,8 +133,8 @@ def generate_killmail_message(self, tracker_pk: int, killmail_id: int) -> None:
             countdown=KILLTRACKER_GENERATE_MESSAGE_RETRY_COUNTDOWN,
             exc=ex,
         )
-    else:
-        send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
+
+    send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
@@ -200,8 +202,8 @@ def send_messages_to_webhook(self, webhook_pk: int) -> None:
             )
 
         raise self.retry(countdown=KILLTRACKER_DISCORD_SEND_DELAY)
-    else:
-        logger.debug("%s: No more messages to send for webhook", webhook)
+
+    logger.debug("%s: No more messages to send for webhook", webhook)
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
@@ -216,7 +218,7 @@ def send_test_message_to_webhook(webhook_pk: int, count: int = 1) -> None:
         return
 
     logger.info("Sending %s test messages to webhook %s", count, webhook)
-    for n in range(count):
-        num_str = f"{n+1}/{count} " if count > 1 else ""
+    for num in range(count):
+        num_str = f"{num+1}/{count} " if count > 1 else ""
         webhook.enqueue_message(content=f"Test message {num_str}from {__title__}.")
     send_messages_to_webhook.delay(webhook.pk)

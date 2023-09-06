@@ -16,8 +16,8 @@ from app_utils.testing import NoSocketsTestCase
 from killtracker.core.killmails import (
     ZKB_API_URL,
     ZKB_REDISQ_URL,
-    EntityCount,
     Killmail,
+    _EntityCount,
 )
 from killtracker.exceptions import KillmailDoesNotExist
 
@@ -227,15 +227,15 @@ class TestKillmailBasics(NoSocketsTestCase):
 
 class TestEntityCount(NoSocketsTestCase):
     def test_is_alliance(self):
-        alliance = EntityCount(1, EntityCount.CATEGORY_ALLIANCE)
-        corporation = EntityCount(2, EntityCount.CATEGORY_CORPORATION)
+        alliance = _EntityCount(1, _EntityCount.CATEGORY_ALLIANCE)
+        corporation = _EntityCount(2, _EntityCount.CATEGORY_CORPORATION)
 
         self.assertTrue(alliance.is_alliance)
         self.assertFalse(corporation.is_alliance)
 
     def test_is_corporation(self):
-        alliance = EntityCount(1, EntityCount.CATEGORY_ALLIANCE)
-        corporation = EntityCount(2, EntityCount.CATEGORY_CORPORATION)
+        alliance = _EntityCount(1, _EntityCount.CATEGORY_ALLIANCE)
+        corporation = _EntityCount(2, _EntityCount.CATEGORY_CORPORATION)
 
         self.assertFalse(alliance.is_corporation)
         self.assertTrue(corporation.is_corporation)
@@ -318,19 +318,10 @@ class TestKillmailStorage(TestCase):
         killmail = KillmailFactory()
         killmail.save()
         # when
-        result = killmail.delete()
+        killmail.delete()
         # then
-        self.assertTrue(result)
         with self.assertRaises(KillmailDoesNotExist):
             Killmail.get(id=killmail.id)
-
-    def test_should_return_false_when_delete_killmails_fails(self):
-        # given
-        killmail = KillmailFactory()
-        # when
-        result = killmail.delete()
-        # then
-        self.assertFalse(result)
 
     def test_should_override_existing_killmail(self):
         # given

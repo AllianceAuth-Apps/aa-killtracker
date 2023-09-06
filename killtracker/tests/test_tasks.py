@@ -7,9 +7,9 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.test.utils import override_settings
 
-from ..exceptions import WebhookTooManyRequests
-from ..models import EveKillmail
-from ..tasks import (
+from killtracker.exceptions import WebhookTooManyRequests
+from killtracker.models import EveKillmail
+from killtracker.tasks import (
     delete_stale_killmails,
     generate_killmail_message,
     run_killtracker,
@@ -18,6 +18,7 @@ from ..tasks import (
     send_test_message_to_webhook,
     store_killmail,
 )
+
 from .testdata.factories import TrackerFactory
 from .testdata.helpers import LoadTestDataMixin, load_eve_killmails, load_killmail
 
@@ -347,7 +348,7 @@ class TestStoreKillmail(TestTrackerBase):
 
 
 @override_settings(CELERY_ALWAYS_EAGER=True, CELERY_EAGER_PROPAGATES_EXCEPTIONS=True)
-@patch("killtracker.models.dhooks_lite.Webhook.execute", spec=True)
+@patch("killtracker.models.trackers.dhooks_lite.Webhook.execute", spec=True)
 @patch(MODULE_PATH + ".logger", spec=True)
 class TestSendTestKillmailsToWebhook(TestTrackerBase):
     def setUp(self) -> None:
@@ -355,7 +356,7 @@ class TestSendTestKillmailsToWebhook(TestTrackerBase):
 
     def test_run_normal(self, mock_logger, mock_execute):
         # given
-        mock_execute.return_value = dhooks_lite.WebhookResponse(dict(), status_code=200)
+        mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
         # when
         with self.assertRaises(celery.exceptions.Retry):
             send_test_message_to_webhook.delay(self.webhook_1.pk)

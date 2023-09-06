@@ -19,7 +19,7 @@ PACKAGE_PATH = "killtracker"
 @patch("celery.app.task.Context.called_directly", False)  # make retry work with eager
 @override_settings(CELERY_ALWAYS_EAGER=True)
 @patch(PACKAGE_PATH + ".tasks.is_esi_online", lambda: True)
-@patch(PACKAGE_PATH + ".models.dhooks_lite.Webhook.execute", spec=True)
+@patch(PACKAGE_PATH + ".models.trackers.dhooks_lite.Webhook.execute", spec=True)
 @requests_mock.Mocker()
 class TestTasksEnd2End(LoadTestDataMixin, TestCase):
     @classmethod
@@ -36,7 +36,7 @@ class TestTasksEnd2End(LoadTestDataMixin, TestCase):
     @patch(PACKAGE_PATH + ".tasks.retry_task_if_esi_is_down", lambda x: None)
     def test_normal_case(self, requests_mocker, mock_execute):
         # given
-        mock_execute.return_value = dhooks_lite.WebhookResponse(dict(), status_code=200)
+        mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
         requests_mocker.register_uri(
             "GET",
             ZKB_REDISQ_URL,
@@ -68,7 +68,7 @@ class TestTasksEnd2End(LoadTestDataMixin, TestCase):
                 raise task.retry()
 
         # given
-        mock_execute.return_value = dhooks_lite.WebhookResponse(dict(), status_code=200)
+        mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
         mock_retry_task_if_esi_is_down.side_effect = my_retry_task_if_esi_is_down
         requests_mocker.register_uri(
             "GET",

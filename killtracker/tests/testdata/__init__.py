@@ -1,9 +1,8 @@
-import inspect
-import os
+from pathlib import Path
 
-_currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+_current_dir = Path(__file__).parent
 _FILENAME_EVEUNIVERSE_TESTDATA = "eveuniverse.json"
 
 
-def test_data_filename():
-    return f"{_currentdir}/{_FILENAME_EVEUNIVERSE_TESTDATA}"
+def test_data_filename() -> str:
+    return str(_current_dir / _FILENAME_EVEUNIVERSE_TESTDATA)
