@@ -1,4 +1,5 @@
 import datetime as dt
+import enum
 from typing import Generic, Set, TypeVar
 
 import factory
@@ -19,9 +20,33 @@ from killtracker.core.killmails import (
 )
 from killtracker.models import EveKillmail, EveKillmailAttacker, Tracker, Webhook
 
+from .helpers import eve_entities_data
 from .load_eveuniverse import eveuniverse_testdata
 
 T = TypeVar("T")
+
+
+class EveEntityVariant(enum.Enum):
+    """A variant of an EveEntity."""
+
+    ALLIANCE = enum.auto()
+    CHARACTER = enum.auto()
+    CORPORATION = enum.auto()
+    FACTION = enum.auto()
+    SHIP_TYPE = enum.auto()
+    SOLAR_SYSTEM = enum.auto()
+    WEAPON_TYPE = enum.auto()
+
+
+def _extract_eve_entity_ids(variant: EveEntityVariant) -> Set[int]:
+    category_map = {
+        EveEntityVariant.ALLIANCE: "alliance",
+        EveEntityVariant.CHARACTER: "character",
+        EveEntityVariant.CORPORATION: "corporation",
+    }
+    category = category_map[variant]
+    entity_ids = {obj["id"] for obj in eve_entities_data if obj["category"] == category}
+    return entity_ids
 
 
 def _extract_faction_ids() -> Set[int]:
@@ -62,30 +87,21 @@ def _extract_weapon_type_ids() -> Set[int]:
     return type_ids
 
 
-_faction_ids = _extract_faction_ids()
-_solar_system_ids = _extract_solar_system_ids()
-_ship_type_ids = _extract_ship_type_ids()
-_weapon_type_ids = _extract_weapon_type_ids()
+_eve_entity_ids = {
+    EveEntityVariant.ALLIANCE: _extract_eve_entity_ids(EveEntityVariant.ALLIANCE),
+    EveEntityVariant.CHARACTER: _extract_eve_entity_ids(EveEntityVariant.CHARACTER),
+    EveEntityVariant.CORPORATION: _extract_eve_entity_ids(EveEntityVariant.CORPORATION),
+    EveEntityVariant.FACTION: _extract_faction_ids(),
+    EveEntityVariant.SOLAR_SYSTEM: _extract_solar_system_ids(),
+    EveEntityVariant.SHIP_TYPE: _extract_ship_type_ids(),
+    EveEntityVariant.WEAPON_TYPE: _extract_weapon_type_ids(),
+}
 
 
-def random_eve_entity_faction(dummy):
-    faction_id = factory.fuzzy.FuzzyChoice(_faction_ids).fuzz()
-    return EveEntity.objects.get(id=faction_id)
-
-
-def random_eve_entity_solar_system(dummy):
-    solar_system_id = factory.fuzzy.FuzzyChoice(_solar_system_ids).fuzz()
-    return EveEntity.objects.get(id=solar_system_id)
-
-
-def random_eve_entity_ship_type(dummy):
-    type_id = factory.fuzzy.FuzzyChoice(_ship_type_ids).fuzz()
-    return EveEntity.objects.get(id=type_id)
-
-
-def random_eve_entity_weapon_type(dummy):
-    type_id = factory.fuzzy.FuzzyChoice(_weapon_type_ids).fuzz()
-    return EveEntity.objects.get(id=type_id)
+def random_eve_entity(variant: EveEntityVariant):
+    ids = _eve_entity_ids[variant]
+    entity_id = factory.fuzzy.FuzzyChoice(ids).fuzz()
+    return EveEntity.objects.get(id=entity_id)
 
 
 class BaseMetaFactory(Generic[T], factory.base.FactoryMetaClass):
@@ -138,8 +154,10 @@ class KillmailCharacterFactory(
     character_id = factory.Sequence(lambda n: 90_000_001 + n)
     corporation_id = factory.Sequence(lambda n: 98_000_001 + n)
     alliance_id = factory.Sequence(lambda n: 99_000_001 + n)
-    faction_id = factory.fuzzy.FuzzyChoice(_faction_ids)
-    ship_type_id = factory.fuzzy.FuzzyChoice(_ship_type_ids)
+    faction_id = factory.fuzzy.FuzzyChoice(_eve_entity_ids[EveEntityVariant.FACTION])
+    ship_type_id = factory.fuzzy.FuzzyChoice(
+        _eve_entity_ids[EveEntityVariant.SHIP_TYPE]
+    )
 
 
 class KillmailVictimFactory(
@@ -159,7 +177,9 @@ class KillmailAttackerFactory(
 
     damage_done = factory.fuzzy.FuzzyInteger(1_000_000)
     security_status = factory.fuzzy.FuzzyFloat(-10.0, 5)
-    weapon_type_id = factory.fuzzy.FuzzyChoice(_weapon_type_ids)
+    weapon_type_id = factory.fuzzy.FuzzyChoice(
+        _eve_entity_ids[EveEntityVariant.WEAPON_TYPE]
+    )
 
 
 class KillmailPositionFactory(
@@ -199,7 +219,9 @@ class KillmailFactory(factory.Factory, metaclass=BaseMetaFactory[Killmail]):
     victim = factory.SubFactory(KillmailVictimFactory)
     position = factory.SubFactory(KillmailPositionFactory)
     zkb = factory.SubFactory(KillmailZkbFactory)
-    solar_system_id = factory.fuzzy.FuzzyChoice(_solar_system_ids)
+    solar_system_id = factory.fuzzy.FuzzyChoice(
+        _eve_entity_ids[EveEntityVariant.SOLAR_SYSTEM]
+    )
 
     @factory.lazy_attribute
     def time(self):
@@ -255,11 +277,15 @@ class EveKillmailFactory(
     character = factory.SubFactory(EveEntityCharacterFactory)
     corporation = factory.SubFactory(EveEntityCorporationFactory)
     alliance = factory.SubFactory(EveEntityAllianceFactory)
-    faction = factory.LazyAttribute(random_eve_entity_faction)
-    ship_type = factory.LazyAttribute(random_eve_entity_ship_type)
+    faction = factory.Transformer(EveEntityVariant.FACTION, transform=random_eve_entity)
+    ship_type = factory.Transformer(
+        EveEntityVariant.SHIP_TYPE, transform=random_eve_entity
+    )
 
     # location
-    solar_system = factory.LazyAttribute(random_eve_entity_solar_system)
+    solar_system = factory.Transformer(
+        EveEntityVariant.SOLAR_SYSTEM, transform=random_eve_entity
+    )
     position_x = factory.fuzzy.FuzzyFloat(-10_000, 10_000)
     position_y = factory.fuzzy.FuzzyFloat(-10_000, 10_000)
     position_z = factory.fuzzy.FuzzyFloat(-10_000, 10_000)
@@ -309,9 +335,13 @@ class EveKillmailAttackerFactory(
     character = factory.SubFactory(EveEntityCharacterFactory)
     corporation = factory.SubFactory(EveEntityCorporationFactory)
     alliance = factory.SubFactory(EveEntityAllianceFactory)
-    faction = factory.LazyAttribute(random_eve_entity_faction)
-    ship_type = factory.LazyAttribute(random_eve_entity_ship_type)
-    weapon_type = factory.LazyAttribute(random_eve_entity_weapon_type)
+    faction = factory.Transformer(EveEntityVariant.FACTION, transform=random_eve_entity)
+    ship_type = factory.Transformer(
+        EveEntityVariant.SHIP_TYPE, transform=random_eve_entity
+    )
+    weapon_type = factory.Transformer(
+        EveEntityVariant.WEAPON_TYPE, transform=random_eve_entity
+    )
 
     damage_done = factory.fuzzy.FuzzyInteger(1_000_000)
     security_status = factory.fuzzy.FuzzyFloat(-10.0, 5)

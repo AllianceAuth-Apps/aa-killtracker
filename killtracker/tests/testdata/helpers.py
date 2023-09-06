@@ -42,7 +42,7 @@ def _load_killmails_data() -> dict:
 
 
 _killmails_data = _load_killmails_data()
-_eve_entities_data = _load_json_from_file("eveentities")
+eve_entities_data = _load_json_from_file("eveentities")
 _eve_alliances_data = _load_json_from_file("evealliances")
 _eve_corporations_data = _load_json_from_file("evecorporations")
 
@@ -52,7 +52,7 @@ def killmails_data() -> dict:
 
 
 def load_eve_entities() -> None:
-    for item in _eve_entities_data:
+    for item in eve_entities_data:
         EveEntity.objects.update_or_create(
             id=item["id"], defaults={"name": item["name"], "category": item["category"]}
         )
