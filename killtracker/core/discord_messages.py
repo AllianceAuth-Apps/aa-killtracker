@@ -32,7 +32,7 @@ class MainOrgInfo(NamedTuple):
     text: str = ""
     name: str = ""
     icon_url: str = eveimageserver.alliance_logo_url(1, size=ICON_SIZE)
-    show_as_fleetkill: bool = False
+    show_as_fleet_kill: bool = False
 
 
 class FinalAttackerInfo(NamedTuple):
@@ -346,16 +346,16 @@ def _calc_main_group(
                 main_org_entity.id, size=ICON_SIZE
             )
         main_org_text = f" | Main group: {main_org_link} ({main_org_entity.count})"
-        show_as_fleetkill = tracker.identify_fleets
+        show_as_fleet_kill = tracker.identify_fleets
     else:
-        show_as_fleetkill = False
+        show_as_fleet_kill = False
         main_org_text = main_org_name = main_org_icon_url = ""
 
     return MainOrgInfo(
         text=main_org_text,
         name=main_org_name,
         icon_url=main_org_icon_url,
-        show_as_fleetkill=show_as_fleetkill,
+        show_as_fleet_kill=show_as_fleet_kill,
     )
 
 
@@ -381,7 +381,7 @@ def _calc_tracked_ship_types(
 
 
 def _calc_thumbnail_url(victim: VictimInfo, main_org: MainOrgInfo):
-    if main_org.show_as_fleetkill:
+    if main_org.show_as_fleet_kill:
         return main_org.icon_url
 
     return victim.ship_type_icon_url
@@ -397,7 +397,7 @@ def _calc_title(
         resolver.to_name(killmail.solar_system_id) if killmail.solar_system_id else ""
     )
 
-    if main_org.show_as_fleetkill:
+    if main_org.show_as_fleet_kill:
         return f"{solar_system_name} | {main_org.name} | Fleetkill"
 
     return f"{solar_system_name} | {victim.ship_type} | Killmail"

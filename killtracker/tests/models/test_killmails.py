@@ -8,7 +8,14 @@ from app_utils.testing import NoSocketsTestCase
 
 from killtracker.models import EveKillmail
 
-from ..testdata.helpers import LoadTestDataMixin, load_eve_killmails, load_killmail
+from ..testdata.factories import EveKillmailAttackerFactory, EveKillmailFactory
+from ..testdata.helpers import (
+    LoadTestDataMixin,
+    load_eve_killmails,
+    load_eveentities,
+    load_killmail,
+)
+from ..testdata.load_eveuniverse import load_eveuniverse
 
 MODELS_PATH = "killtracker.models.killmails"
 
@@ -163,3 +170,45 @@ class TestEveKillmail(LoadTestDataMixin, NoSocketsTestCase):
             500004,
         }
         self.assertSetEqual(result, expected)
+
+
+class TestEveKillmail2(NoSocketsTestCase):
+    def test_should_create_eve_killmail(self):
+        load_eveuniverse()
+        load_eveentities()
+        # when
+        obj = EveKillmailFactory()
+        # then
+        self.assertIsInstance(obj, EveKillmail)
+
+
+class TestEveKillmailAttacker(NoSocketsTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        load_eveuniverse()
+        load_eveentities()
+
+    def test_str_returns_character(self):
+        # given
+        obj = EveKillmailAttackerFactory()
+        # when
+        result = str(obj)
+        # then
+        self.assertEqual(str(obj.character), result)
+
+    def test_str_returns_corporation(self):
+        # given
+        obj = EveKillmailAttackerFactory(character=None)
+        # when
+        result = str(obj)
+        # then
+        self.assertEqual(str(obj.corporation), result)
+
+    def test_str_returns_alliance(self):
+        # given
+        obj = EveKillmailAttackerFactory(character=None, corporation=None)
+        # when
+        result = str(obj)
+        # then
+        self.assertEqual(str(obj.alliance), result)

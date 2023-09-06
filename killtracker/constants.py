@@ -11,6 +11,7 @@ class EveCategoryId(IntEnum):
 
     ENTITY = 11
     FIGHTER = 87
+    MODULE = 7
     SHIP = 6
     STRUCTURE = 65
 
