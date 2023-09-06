@@ -1,5 +1,6 @@
 import datetime as dt
 import enum
+from functools import partial
 from typing import Generic, Set, TypeVar
 
 import factory
@@ -109,51 +110,19 @@ class BaseMetaFactory(Generic[T], factory.base.FactoryMetaClass):
         return super().__call__(*args, **kwargs)
 
 
-class EveEntityCharacterFactory(
-    factory.django.DjangoModelFactory, metaclass=BaseMetaFactory[EveEntity]
-):
-    class Meta:
-        model = EveEntity
-        django_get_or_create = ("id",)
-
-    id = factory.Sequence(lambda n: 90_000_001 + n)
-    name = factory.faker.Faker("name")
-    category = EveEntity.CATEGORY_CHARACTER
-
-
-class EveEntityCorporationFactory(
-    factory.django.DjangoModelFactory, metaclass=BaseMetaFactory[EveEntity]
-):
-    class Meta:
-        model = EveEntity
-        django_get_or_create = ("id",)
-
-    id = factory.Sequence(lambda n: 98_000_001 + n)
-    name = factory.faker.Faker("company")
-    category = EveEntity.CATEGORY_CORPORATION
-
-
-class EveEntityAllianceFactory(
-    factory.django.DjangoModelFactory, metaclass=BaseMetaFactory[EveEntity]
-):
-    class Meta:
-        model = EveEntity
-        django_get_or_create = ("id",)
-
-    id = factory.Sequence(lambda n: 99_000_001 + n)
-    name = factory.faker.Faker("company")
-    category = EveEntity.CATEGORY_ALLIANCE
-
-
 class KillmailCharacterFactory(
     factory.Factory, metaclass=BaseMetaFactory[_KillmailCharacter]
 ):
     class Meta:
         model = _KillmailCharacter
 
-    character_id = factory.Sequence(lambda n: 90_000_001 + n)
-    corporation_id = factory.Sequence(lambda n: 98_000_001 + n)
-    alliance_id = factory.Sequence(lambda n: 99_000_001 + n)
+    character_id = factory.fuzzy.FuzzyChoice(
+        _eve_entity_ids[EveEntityVariant.CHARACTER]
+    )
+    corporation_id = factory.fuzzy.FuzzyChoice(
+        _eve_entity_ids[EveEntityVariant.CORPORATION]
+    )
+    alliance_id = factory.fuzzy.FuzzyChoice(_eve_entity_ids[EveEntityVariant.ALLIANCE])
     faction_id = factory.fuzzy.FuzzyChoice(_eve_entity_ids[EveEntityVariant.FACTION])
     ship_type_id = factory.fuzzy.FuzzyChoice(
         _eve_entity_ids[EveEntityVariant.SHIP_TYPE]
@@ -274,17 +243,23 @@ class EveKillmailFactory(
 
     # victim
     damage_taken = factory.fuzzy.FuzzyInteger(1_000_000)
-    character = factory.SubFactory(EveEntityCharacterFactory)
-    corporation = factory.SubFactory(EveEntityCorporationFactory)
-    alliance = factory.SubFactory(EveEntityAllianceFactory)
-    faction = factory.Transformer(EveEntityVariant.FACTION, transform=random_eve_entity)
-    ship_type = factory.Transformer(
-        EveEntityVariant.SHIP_TYPE, transform=random_eve_entity
+    character = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.CHARACTER)
+    )
+    corporation = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.CORPORATION)
+    )
+    alliance = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.ALLIANCE)
+    )
+    faction = factory.LazyFunction(partial(random_eve_entity, EveEntityVariant.FACTION))
+    ship_type = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.SHIP_TYPE)
     )
 
     # location
-    solar_system = factory.Transformer(
-        EveEntityVariant.SOLAR_SYSTEM, transform=random_eve_entity
+    solar_system = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.SOLAR_SYSTEM)
     )
     position_x = factory.fuzzy.FuzzyFloat(-10_000, 10_000)
     position_y = factory.fuzzy.FuzzyFloat(-10_000, 10_000)
@@ -332,15 +307,21 @@ class EveKillmailAttackerFactory(
         model = EveKillmailAttacker
 
     killmail = factory.SubFactory(EveKillmailFactory, attackers=False)
-    character = factory.SubFactory(EveEntityCharacterFactory)
-    corporation = factory.SubFactory(EveEntityCorporationFactory)
-    alliance = factory.SubFactory(EveEntityAllianceFactory)
-    faction = factory.Transformer(EveEntityVariant.FACTION, transform=random_eve_entity)
-    ship_type = factory.Transformer(
-        EveEntityVariant.SHIP_TYPE, transform=random_eve_entity
+    character = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.CHARACTER)
     )
-    weapon_type = factory.Transformer(
-        EveEntityVariant.WEAPON_TYPE, transform=random_eve_entity
+    corporation = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.CORPORATION)
+    )
+    alliance = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.ALLIANCE)
+    )
+    faction = factory.LazyFunction(partial(random_eve_entity, EveEntityVariant.FACTION))
+    ship_type = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.SHIP_TYPE)
+    )
+    weapon_type = factory.LazyFunction(
+        partial(random_eve_entity, EveEntityVariant.WEAPON_TYPE)
     )
 
     damage_done = factory.fuzzy.FuzzyInteger(1_000_000)
