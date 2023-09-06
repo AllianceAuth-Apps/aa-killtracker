@@ -11,8 +11,8 @@ from killtracker.models import EveKillmail
 from ..testdata.factories import EveKillmailAttackerFactory, EveKillmailFactory
 from ..testdata.helpers import (
     LoadTestDataMixin,
+    load_eve_entities,
     load_eve_killmails,
-    load_eveentities,
     load_killmail,
 )
 from ..testdata.load_eveuniverse import load_eveuniverse
@@ -175,7 +175,7 @@ class TestEveKillmail(LoadTestDataMixin, NoSocketsTestCase):
 class TestEveKillmail2(NoSocketsTestCase):
     def test_should_create_eve_killmail(self):
         load_eveuniverse()
-        load_eveentities()
+        load_eve_entities()
         # when
         obj = EveKillmailFactory()
         # then
@@ -187,7 +187,7 @@ class TestEveKillmailAttacker(NoSocketsTestCase):
     def setUpClass(cls):
         super().setUpClass()
         load_eveuniverse()
-        load_eveentities()
+        load_eve_entities()
 
     def test_str_returns_character(self):
         # given

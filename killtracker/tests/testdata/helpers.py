@@ -42,17 +42,17 @@ def _load_killmails_data() -> dict:
 
 
 _killmails_data = _load_killmails_data()
-_eveentities_data = _load_json_from_file("eveentities")
-_evealliances_data = _load_json_from_file("evealliances")
-_evecorporations_data = _load_json_from_file("evecorporations")
+_eve_entities_data = _load_json_from_file("eveentities")
+_eve_alliances_data = _load_json_from_file("evealliances")
+_eve_corporations_data = _load_json_from_file("evecorporations")
 
 
 def killmails_data() -> dict:
     return deepcopy(_killmails_data)
 
 
-def load_eveentities() -> None:
-    for item in _eveentities_data:
+def load_eve_entities() -> None:
+    for item in _eve_entities_data:
         EveEntity.objects.update_or_create(
             id=item["id"], defaults={"name": item["name"], "category": item["category"]}
         )
@@ -72,9 +72,9 @@ def load_eveentities() -> None:
             pass
 
 
-def load_evealliances() -> None:
+def load_eve_alliances() -> None:
     EveAllianceInfo.objects.all().delete()
-    for item in _evealliances_data:
+    for item in _eve_alliances_data:
         alliance = EveAllianceInfo.objects.create(**item)
         EveEntity.objects.create(
             id=alliance.alliance_id,
@@ -83,9 +83,9 @@ def load_evealliances() -> None:
         )
 
 
-def load_evecorporations() -> None:
+def load_eve_corporations() -> None:
     EveCorporationInfo.objects.all().delete()
-    for item in _evecorporations_data:
+    for item in _eve_corporations_data:
         corporation = EveCorporationInfo.objects.create(**item)
         EveEntity.objects.create(
             id=corporation.corporation_id,
@@ -117,9 +117,9 @@ class LoadTestDataMixin:
     def setUpClass(cls):
         super().setUpClass()
         load_eveuniverse()
-        load_evealliances()
-        load_evecorporations()
-        load_eveentities()
+        load_eve_alliances()
+        load_eve_corporations()
+        load_eve_entities()
         cls.webhook_1 = Webhook.objects.create(
             name="Webhook 1", url="http://www.example.com/webhook_1", is_enabled=True
         )
