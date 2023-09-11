@@ -312,6 +312,8 @@ class TrackerAdmin(admin.ModelAdmin):
             ("require_min_value", self._add_to_clauses_1),
             ("require_attackers_ship_groups", self._add_to_clauses_2),
             ("require_attackers_ship_types", self._add_to_clauses_2),
+            ("require_attackers_weapon_groups", self._add_to_clauses_2),
+            ("require_attackers_weapon_types", self._add_to_clauses_2),
             ("require_victim_ship_groups", self._add_to_clauses_2),
             ("require_victim_ship_types", self._add_to_clauses_2),
             ("exclude_npc_kills", self._add_to_clauses_1),
