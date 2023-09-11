@@ -439,6 +439,7 @@ class TrackerAdmin(admin.ModelAdmin):
                             EveCategoryId.STRUCTURE,
                             EveCategoryId.SHIP,
                             EveCategoryId.FIGHTER,
+                            EveCategoryId.DEPLOYABLE,
                         ]
                     )
                     & Q(published=True)
@@ -470,6 +471,7 @@ class TrackerAdmin(admin.ModelAdmin):
                             EveCategoryId.STRUCTURE,
                             EveCategoryId.SHIP,
                             EveCategoryId.FIGHTER,
+                            EveCategoryId.DEPLOYABLE,
                         ]
                     )
                     & Q(published=True)

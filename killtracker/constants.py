@@ -9,6 +9,7 @@ SESSION_KEY_USES_NPC = "killtracker_uses_npc"
 class EveCategoryId(IntEnum):
     """An Eve category ID."""
 
+    DEPLOYABLE = 22
     ENTITY = 11
     FIGHTER = 87
     MODULE = 7
