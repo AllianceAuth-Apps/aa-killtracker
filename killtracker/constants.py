@@ -20,6 +20,8 @@ class EveCategoryId(IntEnum):
 class EveGroupId(IntEnum):
     """An Eve group ID."""
 
+    FRIGATE = 25
     MINING_DRONE = 101
     ORBITAL_INFRASTRUCTURE = 1025
     PROJECTILE_WEAPON = 55
+    TACTICAL_DESTROYER = 1305
