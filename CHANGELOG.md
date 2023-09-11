@@ -20,6 +20,7 @@ python manage.py killtracker_load_eve
 ### Added
 
 - Add deployable to victim ship groups and types (#41)
+- Add attacker weapon groups and types (#39)
 
 ## [0.11.0] - 2023-09-06
 

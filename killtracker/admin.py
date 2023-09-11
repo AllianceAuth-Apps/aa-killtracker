@@ -123,6 +123,8 @@ class TrackerAdmin(admin.ModelAdmin):
         "require_solar_systems",
         "require_attackers_ship_groups",
         "require_attackers_ship_types",
+        "require_attackers_weapon_groups",
+        "require_attackers_weapon_types",
         "require_victim_ship_groups",
         "require_victim_ship_types",
         "ping_groups",
@@ -206,11 +208,13 @@ class TrackerAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Ship types",
+            "Ship & Weapon types",
             {
                 "fields": (
                     "require_attackers_ship_groups",
                     "require_attackers_ship_types",
+                    "require_attackers_weapon_groups",
+                    "require_attackers_weapon_types",
                     "require_victim_ship_groups",
                     "require_victim_ship_types",
                 ),
@@ -237,6 +241,8 @@ class TrackerAdmin(admin.ModelAdmin):
             "require_solar_systems",
             "require_attackers_ship_groups",
             "require_attackers_ship_types",
+            "require_attackers_weapon_groups",
+            "require_attackers_weapon_types",
             "require_victim_ship_groups",
             "require_victim_ship_types",
             "ping_groups",
@@ -396,6 +402,7 @@ class TrackerAdmin(admin.ModelAdmin):
         show_npc_types = request.session.get(
             SESSION_KEY_USES_NPC, False
         ) or request.session.get(SESSION_KEY_TOOGLE_NPC, False)
+
         if db_field.name in {
             "exclude_attacker_alliances",
             "require_attacker_alliances",
@@ -405,6 +412,7 @@ class TrackerAdmin(admin.ModelAdmin):
             kwargs["queryset"] = EveAllianceInfo.objects.order_by(
                 Lower("alliance_name")
             )
+
         elif db_field.name in {
             "exclude_attacker_corporations",
             "require_attacker_corporations",
@@ -414,6 +422,7 @@ class TrackerAdmin(admin.ModelAdmin):
             kwargs["queryset"] = EveCorporationInfo.objects.order_by(
                 Lower("corporation_name")
             )
+
         elif db_field.name == "require_attackers_ship_groups":
             qs = EveGroup.objects.filter(
                 eve_category_id__in=[
@@ -431,22 +440,7 @@ class TrackerAdmin(admin.ModelAdmin):
                     ).filter(eve_types__mass__gt=1, eve_types__volume__gt=1)
                 ).distinct()
             kwargs["queryset"] = qs.order_by(Lower("name"))
-        elif db_field.name == "require_victim_ship_groups":
-            kwargs["queryset"] = EveGroup.objects.filter(
-                (
-                    Q(
-                        eve_category_id__in=[
-                            EveCategoryId.STRUCTURE,
-                            EveCategoryId.SHIP,
-                            EveCategoryId.FIGHTER,
-                            EveCategoryId.DEPLOYABLE,
-                        ]
-                    )
-                    & Q(published=True)
-                )
-                | (Q(id=EveGroupId.MINING_DRONE) & Q(published=True))
-                | Q(id=EveGroupId.ORBITAL_INFRASTRUCTURE)
-            ).order_by(Lower("name"))
+
         elif db_field.name == "require_attackers_ship_types":
             qs = EveTypePlus.objects.filter(
                 eve_group__eve_category_id__in=[
@@ -463,6 +457,37 @@ class TrackerAdmin(admin.ModelAdmin):
                     volume__gt=1,
                 )
             kwargs["queryset"] = qs.order_by(Lower("name"))
+
+        elif db_field.name == "require_attackers_weapon_groups":
+            qs = EveGroup.objects.filter(
+                eve_category_id__in=[EveCategoryId.MODULE], published=True
+            )
+            kwargs["queryset"] = qs.order_by(Lower("name"))
+
+        elif db_field.name == "require_attackers_weapon_types":
+            qs = EveTypePlus.objects.filter(
+                eve_group__eve_category_id__in=[EveCategoryId.MODULE], published=True
+            )
+
+            kwargs["queryset"] = qs.order_by(Lower("name"))
+
+        elif db_field.name == "require_victim_ship_groups":
+            kwargs["queryset"] = EveGroup.objects.filter(
+                (
+                    Q(
+                        eve_category_id__in=[
+                            EveCategoryId.STRUCTURE,
+                            EveCategoryId.SHIP,
+                            EveCategoryId.FIGHTER,
+                            EveCategoryId.DEPLOYABLE,
+                        ]
+                    )
+                    & Q(published=True)
+                )
+                | (Q(id=EveGroupId.MINING_DRONE) & Q(published=True))
+                | Q(id=EveGroupId.ORBITAL_INFRASTRUCTURE)
+            ).order_by(Lower("name"))
+
         elif db_field.name == "require_victim_ship_types":
             kwargs["queryset"] = EveTypePlus.objects.filter(
                 (
@@ -479,4 +504,5 @@ class TrackerAdmin(admin.ModelAdmin):
                 | (Q(eve_group_id=EveGroupId.MINING_DRONE) & Q(published=True))
                 | Q(eve_group_id=EveGroupId.ORBITAL_INFRASTRUCTURE)
             ).order_by(Lower("name"))
+
         return super().formfield_for_manytomany(db_field, request, **kwargs)

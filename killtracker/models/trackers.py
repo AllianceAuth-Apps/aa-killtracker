@@ -529,6 +529,26 @@ class Tracker(models.Model):
             "is flying one of these ship types. "
         ),
     )
+    require_attackers_weapon_groups = models.ManyToManyField(
+        EveGroup,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where at least one attacker "
+            "is using one of these weapon groups. "
+        ),
+    )
+    require_attackers_weapon_types = models.ManyToManyField(
+        EveType,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where at least one attacker "
+            "is using one of these weapon types. "
+        ),
+    )
     require_victim_ship_groups = models.ManyToManyField(
         EveGroup,
         related_name="+",

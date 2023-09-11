@@ -28,6 +28,8 @@ class Command(BaseCommand):
             str(EveCategoryId.STRUCTURE.value),
             "--category_id",
             str(EveCategoryId.FIGHTER.value),
+            "--category_id_with_dogma",
+            str(EveCategoryId.MODULE.value),
             "--group_id",
             str(EveGroupId.ORBITAL_INFRASTRUCTURE.value),
             "--group_id",
