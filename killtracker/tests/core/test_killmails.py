@@ -216,9 +216,15 @@ class TestKillmailBasics(NoSocketsTestCase):
         # then
         self.assertSetEqual(set(result), {1001, 1002, 1003})
 
-    def test_attackers_ships_types(self):
+    def test_should_return_attacker_ship_type_ids(self):
         self.assertListEqual(
             self.killmail.attackers_ship_type_ids(), [34562, 3756, 3756]
+        )
+
+    def test_should_return_attacker_weapon_ship_type_ids(self):
+        self.assertListEqual(
+            self.killmail.attackers_weapon_type_ids(),
+            [2977, 2488, 2488],
         )
 
     def test_ships_types(self):
