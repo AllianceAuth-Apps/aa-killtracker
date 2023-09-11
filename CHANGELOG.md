@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [0.12.0] - 2023-09-11
+
+### Update notes
+
+Since we have added more types we recommend to re-run the load_eve command to ensure that all of the new types are available when creating a new tracker:
+
+```sh
+python manage.py killtracker_load_eve
+```
+
+### Added
+
+- Add deployable to victim ship groups and types (#41)
+- Add attacker weapon groups and types (#39)
+
 ## [0.11.0] - 2023-09-06
 
 ### Changed

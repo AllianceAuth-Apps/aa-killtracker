@@ -181,6 +181,10 @@ class Killmail(_KillmailBase):
         """Returns ship type IDs of all attackers with duplicates."""
         return [obj.ship_type_id for obj in self.attackers if obj.ship_type_id]
 
+    def attackers_weapon_type_ids(self) -> List[int]:
+        """Returns weapon type IDs of all attackers with duplicates."""
+        return [obj.weapon_type_id for obj in self.attackers if obj.weapon_type_id]
+
     def entity_ids(self) -> Set[int]:
         """Return distinct IDs of all entities (excluding None)."""
         ids = {

@@ -529,6 +529,26 @@ class Tracker(models.Model):
             "is flying one of these ship types. "
         ),
     )
+    require_attackers_weapon_groups = models.ManyToManyField(
+        EveGroup,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where at least one attacker "
+            "is using one of these weapon groups. "
+        ),
+    )
+    require_attackers_weapon_types = models.ManyToManyField(
+        EveType,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where at least one attacker "
+            "is using one of these weapon types. "
+        ),
+    )
     require_victim_ship_groups = models.ManyToManyField(
         EveGroup,
         related_name="+",
@@ -656,6 +676,7 @@ class Tracker(models.Model):
             is_matching, matching_ship_type_ids = self._match_attacker_ships(
                 killmail, is_matching, matching_ship_type_ids
             )
+            is_matching = self._match_attacker_weapons(killmail, is_matching)
             is_matching = self._match_victims(killmail, is_matching)
             is_matching, matching_ship_type_ids = self._match_victim_ship(
                 killmail, is_matching, matching_ship_type_ids
@@ -864,6 +885,31 @@ class Tracker(models.Model):
                 )
 
         return is_matching, matching_ship_type_ids
+
+    def _match_attacker_weapons(
+        self, killmail: Killmail, is_matching: bool
+    ) -> Tuple[bool, List[int]]:
+        if is_matching and self.require_attackers_weapon_groups.exists():
+            weapon_types_matching_qs = EveType.objects.filter(
+                id__in=set(killmail.attackers_weapon_type_ids())
+            ).filter(
+                eve_group_id__in=list(
+                    self.require_attackers_weapon_groups.values_list("id", flat=True)
+                )
+            )
+            is_matching = weapon_types_matching_qs.exists()
+
+        if is_matching and self.require_attackers_weapon_types.exists():
+            weapon_types_matching_qs = EveType.objects.filter(
+                id__in=set(killmail.attackers_weapon_type_ids())
+            ).filter(
+                id__in=list(
+                    self.require_attackers_weapon_types.values_list("id", flat=True)
+                )
+            )
+            is_matching = weapon_types_matching_qs.exists()
+
+        return is_matching
 
     def _match_victims(self, killmail: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_victim_alliances.exists():

@@ -19,6 +19,7 @@ from allianceauth.tests.auth_utils import AuthUtils
 from app_utils.esi_testing import BravadoOperationStub
 from app_utils.testing import NoSocketsTestCase, add_character_to_user_2
 
+from killtracker.constants import EveGroupId
 from killtracker.core.killmails import Killmail, _EntityCount
 from killtracker.models import Tracker
 
@@ -271,8 +272,8 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
     def test_can_require_attackers_ship_groups(self):
         killmail_ids = {10000101, 10000201}
         tracker = TrackerFactory(webhook=self.webhook_1)
-        frigate = EveGroup.objects.get(id=25)
-        td3s = EveGroup.objects.get(id=1305)
+        frigate = EveGroup.objects.get(id=EveGroupId.FRIGATE)
+        td3s = EveGroup.objects.get(id=EveGroupId.TACTICAL_DESTROYER)
         tracker.require_attackers_ship_groups.add(frigate)
         tracker.require_attackers_ship_groups.add(td3s)
         results = self._matching_killmails(tracker, killmail_ids)
@@ -284,7 +285,7 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
     def test_can_require_victim_ship_group(self):
         killmail_ids = {10000101, 10000201}
         tracker = TrackerFactory(webhook=self.webhook_1)
-        td3s = EveGroup.objects.get(id=1305)
+        td3s = EveGroup.objects.get(id=EveGroupId.TACTICAL_DESTROYER)
         tracker.require_victim_ship_groups.add(td3s)
         results = self._matching_killmails(tracker, killmail_ids)
         self.assertEqual(len(results), 1)
@@ -521,6 +522,50 @@ class TestTrackerCalculate2(LoadTestDataMixin, NoSocketsTestCase):
     def test_should_threat_no_value_as_zero(self):
         killmail = KillmailFactory(zkb__total_value=None)
         tracker = TrackerFactory(require_min_value=51, webhook=self.webhook_1)
+        # when
+        result = tracker.process_killmail(killmail)
+        # then
+        self.assertIsNone(result)
+
+    def test_should_accept_with_require_attacker_weapon_group(self):
+        attacker = KillmailAttackerFactory(weapon_type_id=2977)
+        killmail = KillmailFactory(attackers=[attacker])
+        tracker = TrackerFactory(webhook=self.webhook_1)
+        tracker.require_attackers_weapon_groups.add(
+            EveGroup.objects.get(id=EveGroupId.PROJECTILE_WEAPON)
+        )
+        # when
+        result = tracker.process_killmail(killmail)
+        # then
+        self.assertEqual(killmail.id, result.id)
+
+    def test_should_deny_with_require_attacker_weapon_group(self):
+        attacker = KillmailAttackerFactory(weapon_type_id=2488)
+        killmail = KillmailFactory(attackers=[attacker])
+        tracker = TrackerFactory(webhook=self.webhook_1)
+        tracker.require_attackers_weapon_groups.add(
+            EveGroup.objects.get(id=EveGroupId.PROJECTILE_WEAPON)
+        )
+        # when
+        result = tracker.process_killmail(killmail)
+        # then
+        self.assertIsNone(result)
+
+    def test_should_accept_with_require_attacker_weapon_type(self):
+        attacker = KillmailAttackerFactory(weapon_type_id=2977)
+        killmail = KillmailFactory(attackers=[attacker])
+        tracker = TrackerFactory(webhook=self.webhook_1)
+        tracker.require_attackers_weapon_types.add(EveType.objects.get(id=2977))
+        # when
+        result = tracker.process_killmail(killmail)
+        # then
+        self.assertEqual(killmail.id, result.id)
+
+    def test_should_deny_with_require_attacker_weapon_type(self):
+        attacker = KillmailAttackerFactory(weapon_type_id=2488)
+        killmail = KillmailFactory(attackers=[attacker])
+        tracker = TrackerFactory(webhook=self.webhook_1)
+        tracker.require_attackers_weapon_types.add(EveType.objects.get(id=2977))
         # when
         result = tracker.process_killmail(killmail)
         # then
