@@ -19,6 +19,7 @@ from .constants import (
     SESSION_KEY_TOOGLE_NPC,
     SESSION_KEY_USES_NPC,
     EveCategoryId,
+    EveDogmaEffectId,
     EveGroupId,
 )
 from .core.killmails import Killmail
@@ -462,13 +463,17 @@ class TrackerAdmin(admin.ModelAdmin):
 
         elif db_field.name == "require_attackers_weapon_groups":
             qs = EveGroup.objects.filter(
-                eve_category_id__in=[EveCategoryId.MODULE], published=True
-            )
+                eve_category_id__in=[EveCategoryId.MODULE],
+                published=True,
+                eve_types__dogma_effects__eve_dogma_effect_id=EveDogmaEffectId.HI_POWER,
+            ).distinct()
             kwargs["queryset"] = qs.order_by(Lower("name"))
 
         elif db_field.name == "require_attackers_weapon_types":
             qs = EveTypePlus.objects.filter(
-                eve_group__eve_category_id__in=[EveCategoryId.MODULE], published=True
+                eve_group__eve_category_id__in=[EveCategoryId.MODULE],
+                published=True,
+                dogma_effects__eve_dogma_effect_id=EveDogmaEffectId.HI_POWER,
             )
 
             kwargs["queryset"] = qs.order_by(Lower("name"))

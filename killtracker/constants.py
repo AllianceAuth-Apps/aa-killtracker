@@ -6,6 +6,12 @@ SESSION_KEY_TOOGLE_NPC = "killtracker_toogle_npc"
 SESSION_KEY_USES_NPC = "killtracker_uses_npc"
 
 
+class EveDogmaEffectId(IntEnum):
+    """An Eve dogma effect ID."""
+
+    HI_POWER = 12
+
+
 class EveCategoryId(IntEnum):
     """An Eve category ID."""
 

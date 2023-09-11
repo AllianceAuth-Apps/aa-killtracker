@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [0.12.0] - 2023-09-06
+## [0.12.0] - TBD
 
 ### Update notes
 
-Since we have added more types we recommend running the load_eve command again to ensure all of the new types are available when creating a new tracker:
+Since we have added more types we recommend to run the load_eve command again to ensure that all of the new types are available when creating a new tracker:
 
 ```sh
 python manage.py killtracker_load_eve
