@@ -1,15 +1,7 @@
 """Global constants for killtracker."""
 
 from enum import IntEnum
-
-SESSION_KEY_TOOGLE_NPC = "killtracker_toogle_npc"
-SESSION_KEY_USES_NPC = "killtracker_uses_npc"
-
-
-class EveDogmaEffectId(IntEnum):
-    """An Eve dogma effect ID."""
-
-    HI_POWER = 12
+from typing import Set
 
 
 class EveCategoryId(IntEnum):
@@ -31,3 +23,64 @@ class EveGroupId(IntEnum):
     ORBITAL_INFRASTRUCTURE = 1025
     PROJECTILE_WEAPON = 55
     TACTICAL_DESTROYER = 1305
+
+    BURST_PROJECTORS = 842
+    ENERGY_NEUTRALIZER = 71
+    ENERGY_NOSFERATU = 68
+    ENERGY_WEAPON = 53
+    HYBRID_WEAPON = 74
+    INTERDICTION_NULLIFIER = 4117
+    INTERDICTION_SPHERE_LAUNCHER = 589
+    MISSILE_LAUNCHER_BOMB = 862
+    MISSILE_LAUNCHER_CRUISE = 506
+    MISSILE_LAUNCHER_DEFENDER = 512
+    MISSILE_LAUNCHER_HEAVY = 510
+    MISSILE_LAUNCHER_HEAVY_ASSAULT = 771
+    MISSILE_LAUNCHER_LIGHT = 509
+    MISSILE_LAUNCHER_RAPID_HEAVY = 1245
+    MISSILE_LAUNCHER_RAPID_LIGHT = 511
+    MISSILE_LAUNCHER_RAPID_TORPEDO = 1673
+    MISSILE_LAUNCHER_ROCKET = 507
+    MISSILE_LAUNCHER_TORPEDO = 508
+    MISSILE_LAUNCHER_XL_CRUISE = 1674
+    MISSILE_LAUNCHER_XL_TORPEDO = 524
+    PRECURSOR_WEAPON = 1986
+    SMART_BOMB = 72
+    STRIP_MINER = 464
+    SUPER_WEAPON = 588
+    TITAN_PHENOMENA_GENERATOR = 1815
+    VORTON_PROJECTOR = 4060
+    WARP_DISRUPT_FIELD_GENERATOR = 899
+
+    @classmethod
+    def weapons(cls) -> Set["EveGroupId"]:
+        """Return group IDs for all weapons."""
+        return {
+            cls.BURST_PROJECTORS,
+            cls.ENERGY_NEUTRALIZER,
+            cls.ENERGY_NOSFERATU,
+            cls.ENERGY_WEAPON,
+            cls.HYBRID_WEAPON,
+            cls.INTERDICTION_NULLIFIER,
+            cls.INTERDICTION_SPHERE_LAUNCHER,
+            cls.MISSILE_LAUNCHER_BOMB,
+            cls.MISSILE_LAUNCHER_CRUISE,
+            cls.MISSILE_LAUNCHER_DEFENDER,
+            cls.MISSILE_LAUNCHER_HEAVY,
+            cls.MISSILE_LAUNCHER_HEAVY_ASSAULT,
+            cls.MISSILE_LAUNCHER_LIGHT,
+            cls.MISSILE_LAUNCHER_RAPID_HEAVY,
+            cls.MISSILE_LAUNCHER_RAPID_LIGHT,
+            cls.MISSILE_LAUNCHER_RAPID_TORPEDO,
+            cls.MISSILE_LAUNCHER_ROCKET,
+            cls.MISSILE_LAUNCHER_TORPEDO,
+            cls.MISSILE_LAUNCHER_XL_CRUISE,
+            cls.MISSILE_LAUNCHER_XL_TORPEDO,
+            cls.PRECURSOR_WEAPON,
+            cls.PROJECTILE_WEAPON,
+            cls.SMART_BOMB,
+            cls.SUPER_WEAPON,
+            cls.TITAN_PHENOMENA_GENERATOR,
+            cls.VORTON_PROJECTOR,
+            cls.WARP_DISRUPT_FIELD_GENERATOR,
+        }

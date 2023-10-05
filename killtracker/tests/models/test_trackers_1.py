@@ -31,7 +31,7 @@ from ..testdata.factories import (
 )
 from ..testdata.helpers import LoadTestDataMixin, load_killmail
 
-MODULE_PATH = "killtracker.models.trackers"
+MODELS_PATH = "killtracker.models"
 
 
 def esi_get_route_origin_destination(origin, destination, **kwargs) -> list:
@@ -81,7 +81,7 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
         expected = {10000001, 10000002, 10000003, 10000004, 10000005}
         self.assertSetEqual(results, expected)
 
-    @patch(MODULE_PATH + ".KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER", 60)
+    @patch(MODELS_PATH + ".trackers.KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER", 60)
     def test_excludes_older_killmails(self):
         tracker = TrackerFactory(
             name="Test",
@@ -144,7 +144,7 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
         expected = {10000002, 10000003, 10000004}
         self.assertSetEqual(results, expected)
 
-    @patch("eveuniverse.models.esi")
+    @patch("eveuniverse.models.universe_2.esi")
     def test_can_filter_max_jumps(self, mock_esi):
         mock_esi.client.Routes.get_route_origin_destination.side_effect = (
             esi_get_route_origin_destination
@@ -160,7 +160,7 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
         expected = {10000102, 10000103}
         self.assertSetEqual(results, expected)
 
-    @patch("eveuniverse.models.esi")
+    @patch("eveuniverse.models.universe_2.esi")
     def test_can_filter_max_distance(self, mock_esi):
         mock_esi.client.Routes.get_route_origin_destination.side_effect = (
             esi_get_route_origin_destination
@@ -572,7 +572,7 @@ class TestTrackerCalculate2(LoadTestDataMixin, NoSocketsTestCase):
         self.assertIsNone(result)
 
 
-@patch(MODULE_PATH + ".EveSolarSystem.jumps_to")
+@patch(MODELS_PATH + ".trackers.EveSolarSystem.jumps_to")
 class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
     def setUp(self) -> None:
         self.tracker = TrackerFactory(webhook=self.webhook_1)
@@ -667,8 +667,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
         self.tracker = TrackerFactory(name="My Tracker", webhook=self.webhook_1)
         self.webhook_1.main_queue.clear()
 
-    @patch(MODULE_PATH + ".KILLTRACKER_WEBHOOK_SET_AVATAR", True)
-    @patch("eveuniverse.models.esi")
+    @patch(MODELS_PATH + ".webhooks.KILLTRACKER_WEBHOOK_SET_AVATAR", True)
+    @patch("eveuniverse.models.universe_2.esi")
     def test_normal(self, mock_esi):
         mock_esi.client.Routes.get_route_origin_destination.side_effect = (
             esi_get_route_origin_destination
@@ -694,8 +694,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
         self.assertIn("Combat Battlecruiser", embed["description"])
         self.assertIn("Tracked ship types", embed["description"])
 
-    @patch(MODULE_PATH + ".KILLTRACKER_WEBHOOK_SET_AVATAR", False)
-    @patch("eveuniverse.models.esi")
+    @patch(MODELS_PATH + ".webhooks.KILLTRACKER_WEBHOOK_SET_AVATAR", False)
+    @patch("eveuniverse.models.universe_2.esi")
     def test_disabled_avatar(self, mock_esi):
         mock_esi.client.Routes.get_route_origin_destination.side_effect = (
             esi_get_route_origin_destination
