@@ -54,6 +54,7 @@ class EveGroupId(IntEnum):
 
     @classmethod
     def weapons(cls) -> Set["EveGroupId"]:
+        """Return group IDs for all weapons."""
         return {
             cls.BURST_PROJECTORS,
             cls.ENERGY_NEUTRALIZER,

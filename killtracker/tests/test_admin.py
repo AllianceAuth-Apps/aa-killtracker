@@ -1,12 +1,14 @@
 from django.contrib.auth.models import User
+from django.test import TestCase
 from django.urls import reverse
 from django_webtest import WebTest
 
 from allianceauth.eveonline.models import EveCorporationInfo
+from app_utils.testdata_factories import UserFactory
 
 from killtracker.models import Tracker, Webhook
 
-from .testdata.factories import TrackerFactory
+from .testdata.factories import TrackerFactory, WebhookFactory
 from .testdata.helpers import LoadTestDataMixin
 
 
@@ -94,34 +96,6 @@ class TestTrackerValidations(LoadTestDataMixin, WebTest):
         self.assertIn("Please correct the error below", response.text)
         self.assertEqual(Tracker.objects.count(), 0)
 
-    def test_can_not_have_same_options_attacker_alliances(self):
-        form = self._open_page()
-        form["exclude_attacker_alliances"] = [
-            self.alliance_3001.pk,
-            self.alliance_3011.pk,
-        ]
-        form["require_attacker_alliances"] = [self.alliance_3001.pk]
-        response = form.submit()
-
-        # assert results
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("Please correct the error below", response.text)
-        self.assertEqual(Tracker.objects.count(), 0)
-
-    def test_can_not_have_same_options_attacker_corporations(self):
-        form = self._open_page()
-        form["exclude_attacker_corporations"] = [
-            self.corporation_2001.pk,
-            self.corporation_2011.pk,
-        ]
-        form["require_attacker_corporations"] = [self.corporation_2011.pk]
-        response = form.submit()
-
-        # assert results
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("Please correct the error below", response.text)
-        self.assertEqual(Tracker.objects.count(), 0)
-
     def test_min_attackers_must_be_less_than_max_attackers(self):
         form = self._open_page()
         form["require_min_attackers"] = 10
@@ -156,3 +130,34 @@ class TestTrackerValidations(LoadTestDataMixin, WebTest):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Please correct the error below", response.text)
         self.assertEqual(Tracker.objects.count(), 0)
+
+
+class TestTrackerValidations2(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.user = UserFactory(is_staff=True, is_superuser=True)
+        cls.webhook = WebhookFactory()
+        cls.url_add = reverse("admin:killtracker_tracker_add")
+        cls.url_changelist = reverse("admin:killtracker_tracker_changelist")
+
+    def test_should_add_new_tracker(self):
+        # given
+        self.client.force_login(self.user)
+        data = {
+            "name": "Dummy",
+            "webhook": self.webhook.pk,
+            "_save": "Save",
+            "is_enabled": "on",
+            "color": "#000000",
+            "ping_type": "PN",
+            "is_posting_name": "on",
+        }
+
+        # when
+        response = self.client.post(self.url_add, data=data)
+
+        # then
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, self.url_changelist)
+        self.assertTrue(Tracker.objects.filter(name="Dummy").exists())

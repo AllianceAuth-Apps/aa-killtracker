@@ -348,7 +348,7 @@ class TestStoreKillmail(TestTrackerBase):
 
 
 @override_settings(CELERY_ALWAYS_EAGER=True, CELERY_EAGER_PROPAGATES_EXCEPTIONS=True)
-@patch("killtracker.models.trackers.dhooks_lite.Webhook.execute", spec=True)
+@patch("killtracker.models.webhooks.dhooks_lite.Webhook.execute", spec=True)
 @patch(MODULE_PATH + ".logger", spec=True)
 class TestSendTestKillmailsToWebhook(TestTrackerBase):
     def setUp(self) -> None:

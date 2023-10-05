@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [0.12.1] - 2023-10-05
+
+### Changed
+
+- Improve performance of tracker form page
+- Remove NPC button from page with tracker form
+- Refactoring
+
 ## [0.12.0] - 2023-09-11
 
 ### Update notes
