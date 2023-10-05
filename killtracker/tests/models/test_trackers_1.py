@@ -144,7 +144,7 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
         expected = {10000002, 10000003, 10000004}
         self.assertSetEqual(results, expected)
 
-    @patch("eveuniverse.models.esi")
+    @patch("eveuniverse.models.universe_2.esi")
     def test_can_filter_max_jumps(self, mock_esi):
         mock_esi.client.Routes.get_route_origin_destination.side_effect = (
             esi_get_route_origin_destination
@@ -160,7 +160,7 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
         expected = {10000102, 10000103}
         self.assertSetEqual(results, expected)
 
-    @patch("eveuniverse.models.esi")
+    @patch("eveuniverse.models.universe_2.esi")
     def test_can_filter_max_distance(self, mock_esi):
         mock_esi.client.Routes.get_route_origin_destination.side_effect = (
             esi_get_route_origin_destination
@@ -668,7 +668,7 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
         self.webhook_1.main_queue.clear()
 
     @patch(MODULE_PATH + ".KILLTRACKER_WEBHOOK_SET_AVATAR", True)
-    @patch("eveuniverse.models.esi")
+    @patch("eveuniverse.models.universe_2.esi")
     def test_normal(self, mock_esi):
         mock_esi.client.Routes.get_route_origin_destination.side_effect = (
             esi_get_route_origin_destination
@@ -695,7 +695,7 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
         self.assertIn("Tracked ship types", embed["description"])
 
     @patch(MODULE_PATH + ".KILLTRACKER_WEBHOOK_SET_AVATAR", False)
-    @patch("eveuniverse.models.esi")
+    @patch("eveuniverse.models.universe_2.esi")
     def test_disabled_avatar(self, mock_esi):
         mock_esi.client.Routes.get_route_origin_destination.side_effect = (
             esi_get_route_origin_destination

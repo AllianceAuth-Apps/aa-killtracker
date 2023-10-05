@@ -4,27 +4,17 @@
 
 
 from django.contrib import admin
-from django.db.models import Q
-from django.db.models.functions import Lower
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.utils.safestring import mark_safe
-from eveuniverse.models import EveGroup
 
 from allianceauth import NAME as site_header
-from allianceauth.eveonline.models import EveAllianceInfo, EveCorporationInfo
 
 from . import tasks
-from .constants import (
-    SESSION_KEY_TOOGLE_NPC,
-    SESSION_KEY_USES_NPC,
-    EveCategoryId,
-    EveDogmaEffectId,
-    EveGroupId,
-)
+from .constants import SESSION_KEY_USES_NPC, EveCategoryId
 from .core.killmails import Killmail
 from .forms import TrackerAdminForm, TrackerAdminKillmailIdForm, field_nice_display
-from .models import EveKillmail, EveKillmailAttacker, EveTypePlus, Tracker, Webhook
+from .models import EveKillmail, EveKillmailAttacker, Tracker, Webhook
 
 
 class EveKillmailAttackerInline(admin.TabularInline):
@@ -106,8 +96,11 @@ class TrackerAdmin(admin.ModelAdmin):
     )
     ordering = ("name",)
     actions = ["disable_tracker", "enable_tracker", "reset_color", "run_test_killmail"]
-    autocomplete_fields = ["origin_solar_system"]
-    filter_horizontal = (
+    autocomplete_fields = [
+        "origin_solar_system",
+        "require_regions",
+        "require_constellations",
+        "require_solar_systems",
         "exclude_attacker_alliances",
         "exclude_attacker_corporations",
         "require_attacker_alliances",
@@ -116,19 +109,17 @@ class TrackerAdmin(admin.ModelAdmin):
         "exclude_victim_alliances",
         "require_victim_corporations",
         "exclude_victim_corporations",
-        "exclude_attacker_states",
-        "require_attacker_states",
-        "require_victim_states",
-        "require_regions",
-        "require_constellations",
-        "require_solar_systems",
-        "require_attackers_ship_groups",
         "require_attackers_ship_types",
+        "require_attackers_ship_groups",
         "require_attackers_weapon_groups",
         "require_attackers_weapon_types",
         "require_victim_ship_groups",
         "require_victim_ship_types",
-        "ping_groups",
+    ]
+    filter_horizontal = (
+        "exclude_attacker_states",
+        "require_attacker_states",
+        "require_victim_states",
     )
     fieldsets = (
         (None, {"fields": ("name", "description", "is_enabled", "color")}),
@@ -399,117 +390,3 @@ class TrackerAdmin(admin.ModelAdmin):
                 "queryset": queryset.order_by("name"),
             },
         )
-
-    def formfield_for_manytomany(self, db_field, request, **kwargs):
-        """overriding this formfield to have sorted lists in the form"""
-        show_npc_types = request.session.get(
-            SESSION_KEY_USES_NPC, False
-        ) or request.session.get(SESSION_KEY_TOOGLE_NPC, False)
-
-        if db_field.name in {
-            "exclude_attacker_alliances",
-            "require_attacker_alliances",
-            "require_victim_alliances",
-            "exclude_victim_alliances",
-        }:
-            kwargs["queryset"] = EveAllianceInfo.objects.order_by(
-                Lower("alliance_name")
-            )
-
-        elif db_field.name in {
-            "exclude_attacker_corporations",
-            "require_attacker_corporations",
-            "require_victim_corporations",
-            "exclude_victim_corporations",
-        }:
-            kwargs["queryset"] = EveCorporationInfo.objects.order_by(
-                Lower("corporation_name")
-            )
-
-        elif db_field.name == "require_attackers_ship_groups":
-            qs = EveGroup.objects.filter(
-                eve_category_id__in=[
-                    EveCategoryId.STRUCTURE,
-                    EveCategoryId.SHIP,
-                    EveCategoryId.FIGHTER,
-                ],
-                published=True,
-            )
-            if show_npc_types:
-                qs = (
-                    qs
-                    | EveGroup.objects.filter(
-                        eve_category_id=EveCategoryId.ENTITY
-                    ).filter(eve_types__mass__gt=1, eve_types__volume__gt=1)
-                ).distinct()
-            kwargs["queryset"] = qs.order_by(Lower("name"))
-
-        elif db_field.name == "require_attackers_ship_types":
-            qs = EveTypePlus.objects.filter(
-                eve_group__eve_category_id__in=[
-                    EveCategoryId.STRUCTURE,
-                    EveCategoryId.SHIP,
-                    EveCategoryId.FIGHTER,
-                ],
-                published=True,
-            )
-            if show_npc_types:
-                qs = qs | EveTypePlus.objects.filter(
-                    eve_group__eve_category_id=EveCategoryId.ENTITY,
-                    mass__gt=1,
-                    volume__gt=1,
-                )
-            kwargs["queryset"] = qs.order_by(Lower("name"))
-
-        elif db_field.name == "require_attackers_weapon_groups":
-            qs = EveGroup.objects.filter(
-                eve_category_id__in=[EveCategoryId.MODULE],
-                published=True,
-                eve_types__dogma_effects__eve_dogma_effect_id=EveDogmaEffectId.HI_POWER,
-            ).distinct()
-            kwargs["queryset"] = qs.order_by(Lower("name"))
-
-        elif db_field.name == "require_attackers_weapon_types":
-            qs = EveTypePlus.objects.filter(
-                eve_group__eve_category_id__in=[EveCategoryId.MODULE],
-                published=True,
-                dogma_effects__eve_dogma_effect_id=EveDogmaEffectId.HI_POWER,
-            )
-
-            kwargs["queryset"] = qs.order_by(Lower("name"))
-
-        elif db_field.name == "require_victim_ship_groups":
-            kwargs["queryset"] = EveGroup.objects.filter(
-                (
-                    Q(
-                        eve_category_id__in=[
-                            EveCategoryId.STRUCTURE,
-                            EveCategoryId.SHIP,
-                            EveCategoryId.FIGHTER,
-                            EveCategoryId.DEPLOYABLE,
-                        ]
-                    )
-                    & Q(published=True)
-                )
-                | (Q(id=EveGroupId.MINING_DRONE) & Q(published=True))
-                | Q(id=EveGroupId.ORBITAL_INFRASTRUCTURE)
-            ).order_by(Lower("name"))
-
-        elif db_field.name == "require_victim_ship_types":
-            kwargs["queryset"] = EveTypePlus.objects.filter(
-                (
-                    Q(
-                        eve_group__eve_category_id__in=[
-                            EveCategoryId.STRUCTURE,
-                            EveCategoryId.SHIP,
-                            EveCategoryId.FIGHTER,
-                            EveCategoryId.DEPLOYABLE,
-                        ]
-                    )
-                    & Q(published=True)
-                )
-                | (Q(eve_group_id=EveGroupId.MINING_DRONE) & Q(published=True))
-                | Q(eve_group_id=EveGroupId.ORBITAL_INFRASTRUCTURE)
-            ).order_by(Lower("name"))
-
-        return super().formfield_for_manytomany(db_field, request, **kwargs)

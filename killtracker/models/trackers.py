@@ -10,6 +10,7 @@ from simple_mq import SimpleMQ
 from django.contrib.auth.models import Group, User
 from django.core.cache import cache
 from django.db import models
+from django.db.models import Q
 from django.utils.timezone import now
 from django.utils.translation import gettext_lazy as _
 from eveuniverse.helpers import meters_to_ly
@@ -34,6 +35,7 @@ from killtracker.app_settings import (
     KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER,
     KILLTRACKER_WEBHOOK_SET_AVATAR,
 )
+from killtracker.constants import EveCategoryId, EveGroupId
 from killtracker.core.killmails import Killmail
 from killtracker.exceptions import WebhookTooManyRequests
 from killtracker.managers import EveTypePlusManager, TrackerManager, WebhookManager
@@ -269,6 +271,72 @@ class Webhook(models.Model):
         if name and url:
             return f"[{str(name)}]({str(url)})"
         return str(name)
+
+
+def _require_attackers_ship_groups_query():
+    return Q(
+        eve_category_id__in=[
+            EveCategoryId.STRUCTURE,
+            EveCategoryId.SHIP,
+            EveCategoryId.FIGHTER,
+        ],
+        published=True,
+    ) | Q(eve_category_id=EveCategoryId.ENTITY)
+
+
+def _require_attackers_ship_types_query():
+    return Q(
+        eve_group__eve_category_id__in=[
+            EveCategoryId.STRUCTURE,
+            EveCategoryId.SHIP,
+            EveCategoryId.FIGHTER,
+        ],
+        published=True,
+    ) | Q(
+        eve_group__eve_category_id=EveCategoryId.ENTITY,
+        mass__gt=1,
+        volume__gt=1,
+    )
+
+
+def _require_attackers_weapon_groups_query():
+    return Q(id__in=EveGroupId.weapons())
+
+
+def _require_attackers_weapon_types_query():
+    return Q(eve_group__in=EveGroupId.weapons())
+
+
+def _require_victim_ship_groups_query():
+    return (
+        Q(
+            eve_category_id__in=[
+                EveCategoryId.STRUCTURE,
+                EveCategoryId.SHIP,
+                EveCategoryId.FIGHTER,
+                EveCategoryId.DEPLOYABLE,
+            ],
+            published=True,
+        )
+        | Q(id=EveGroupId.MINING_DRONE, published=True)
+        | Q(id=EveGroupId.ORBITAL_INFRASTRUCTURE)
+    )
+
+
+def _require_victim_ship_types_query():
+    return (
+        Q(
+            eve_group__eve_category_id__in=[
+                EveCategoryId.STRUCTURE,
+                EveCategoryId.SHIP,
+                EveCategoryId.FIGHTER,
+                EveCategoryId.DEPLOYABLE,
+            ],
+            published=True,
+        )
+        | Q(eve_group_id=EveGroupId.MINING_DRONE, published=True)
+        | Q(eve_group_id=EveGroupId.ORBITAL_INFRASTRUCTURE)
+    )
 
 
 class Tracker(models.Model):
@@ -514,6 +582,7 @@ class Tracker(models.Model):
         related_name="+",
         default=None,
         blank=True,
+        limit_choices_to=_require_attackers_ship_groups_query,
         help_text=(
             "Only include killmails where at least one attacker "
             "is flying one of these ship groups. "
@@ -524,6 +593,7 @@ class Tracker(models.Model):
         related_name="+",
         default=None,
         blank=True,
+        limit_choices_to=_require_attackers_ship_types_query,
         help_text=(
             "Only include killmails where at least one attacker "
             "is flying one of these ship types. "
@@ -534,6 +604,7 @@ class Tracker(models.Model):
         related_name="+",
         default=None,
         blank=True,
+        limit_choices_to=_require_attackers_weapon_groups_query,
         help_text=(
             "Only include killmails where at least one attacker "
             "is using one of these weapon groups. "
@@ -544,6 +615,7 @@ class Tracker(models.Model):
         related_name="+",
         default=None,
         blank=True,
+        limit_choices_to=_require_attackers_weapon_types_query,
         help_text=(
             "Only include killmails where at least one attacker "
             "is using one of these weapon types. "
@@ -554,6 +626,7 @@ class Tracker(models.Model):
         related_name="+",
         default=None,
         blank=True,
+        limit_choices_to=_require_victim_ship_groups_query,
         help_text=(
             "Only include killmails where victim is flying one of these ship groups. "
         ),
@@ -563,6 +636,7 @@ class Tracker(models.Model):
         related_name="+",
         default=None,
         blank=True,
+        limit_choices_to=_require_victim_ship_types_query,
         help_text=(
             "Only include killmails where victim is flying one of these ship types. "
         ),

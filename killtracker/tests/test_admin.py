@@ -1,16 +1,13 @@
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django_webtest import WebTest
-from eveuniverse.models import EveType
 
 from allianceauth.eveonline.models import EveCorporationInfo
-from app_utils.testing import create_fake_user
 
 from killtracker.models import Tracker, Webhook
 
 from .testdata.factories import TrackerFactory
 from .testdata.helpers import LoadTestDataMixin
-from .testdata.load_eveuniverse import load_eveuniverse
 
 
 class TestTrackerChangeList(LoadTestDataMixin, WebTest):
@@ -159,144 +156,3 @@ class TestTrackerValidations(LoadTestDataMixin, WebTest):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Please correct the error below", response.text)
         self.assertEqual(Tracker.objects.count(), 0)
-
-
-class TestTrackerChangeForm(WebTest):
-    @classmethod
-    def setUpClass(cls) -> None:
-        super().setUpClass()
-        cls.user = create_fake_user(1001, "Bruce Wayne")
-        cls.user.is_staff = True
-        cls.user.is_superuser = True
-        cls.user.save()
-        load_eveuniverse()
-        cls.npc_type = EveType.objects.get(id=23320)
-
-    def test_do_not_show_npcs_when_not_used_and_not_enabled(self):
-        # given
-        tracker = TrackerFactory()
-        url = reverse("admin:killtracker_tracker_change", args=[tracker.id])
-        self.app.set_user(self.user)
-        # when
-        response = self.app.get(url)
-        # then
-        self.assertEqual(response.status_code, 200)
-        form = response.form
-        require_attackers_ship_types_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_types"].options
-        }
-        self.assertNotIn(self.npc_type.id, require_attackers_ship_types_ids)
-        require_attackers_ship_groups_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_groups"].options
-        }
-        self.assertNotIn(self.npc_type.eve_group_id, require_attackers_ship_groups_ids)
-
-    def test_show_npcs_when_in_use(self):
-        # given
-        tracker = TrackerFactory()
-        tracker.require_attackers_ship_types.add(self.npc_type)
-        url = reverse("admin:killtracker_tracker_change", args=[tracker.id])
-        self.app.set_user(self.user)
-        # when
-        response = self.app.get(url)
-        # then
-        self.assertEqual(response.status_code, 200)
-        form = response.form
-        require_attackers_ship_types_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_types"].options
-        }
-        self.assertIn(self.npc_type.id, require_attackers_ship_types_ids)
-        require_attackers_ship_groups_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_groups"].options
-        }
-        self.assertIn(self.npc_type.eve_group_id, require_attackers_ship_groups_ids)
-
-    def test_show_npcs_when_enabled(self):
-        # given
-        tracker = TrackerFactory()
-        tracker.require_attackers_ship_types.add(self.npc_type)
-        url = reverse("admin:killtracker_tracker_change", args=[tracker.id])
-        self.app.set_user(self.user)
-        self.app.session["killtracker_toogle_npc"] = True
-        # when
-        response = self.app.get(url)
-        # then
-        self.assertEqual(response.status_code, 200)
-        form = response.form
-        require_attackers_ship_types_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_types"].options
-        }
-        self.assertIn(self.npc_type.id, require_attackers_ship_types_ids)
-        require_attackers_ship_groups_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_groups"].options
-        }
-        self.assertIn(self.npc_type.eve_group_id, require_attackers_ship_groups_ids)
-
-    def test_can_enable_npcs(self):
-        # given
-        tracker = TrackerFactory()
-        url = reverse("admin:killtracker_tracker_change", args=[tracker.id])
-        self.app.set_user(self.user)
-        initial_page = self.app.get(url)
-        # when
-        response = initial_page.click(linkid="toogle-npc").follow()
-        # then
-        self.assertEqual(response.status_code, 200)
-        form = response.form
-        require_attackers_ship_types_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_types"].options
-        }
-        self.assertIn(self.npc_type.id, require_attackers_ship_types_ids)
-        require_attackers_ship_groups_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_groups"].options
-        }
-        self.assertIn(self.npc_type.eve_group_id, require_attackers_ship_groups_ids)
-
-
-class TestTrackerAddForm(WebTest):
-    @classmethod
-    def setUpClass(cls) -> None:
-        super().setUpClass()
-        cls.user = create_fake_user(1001, "Bruce Wayne")
-        cls.user.is_staff = True
-        cls.user.is_superuser = True
-        cls.user.save()
-        load_eveuniverse()
-        cls.npc_type = EveType.objects.get(id=23320)
-
-    def test_do_not_show_npcs_when_not_enabled(self):
-        # given
-        url = reverse("admin:killtracker_tracker_add")
-        self.app.set_user(self.user)
-        # when
-        response = self.app.get(url)
-        # then
-        self.assertEqual(response.status_code, 200)
-        form = response.form
-        require_attackers_ship_types_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_types"].options
-        }
-        self.assertNotIn(self.npc_type.id, require_attackers_ship_types_ids)
-        require_attackers_ship_groups_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_groups"].options
-        }
-        self.assertNotIn(self.npc_type.eve_group_id, require_attackers_ship_groups_ids)
-
-    def test_can_enable_npcs(self):
-        # given
-        url = reverse("admin:killtracker_tracker_add")
-        self.app.set_user(self.user)
-        initial_page = self.app.get(url)
-        # when
-        response = initial_page.click(linkid="toogle-npc").follow()
-        # then
-        self.assertEqual(response.status_code, 200)
-        form = response.form
-        require_attackers_ship_types_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_types"].options
-        }
-        self.assertIn(self.npc_type.id, require_attackers_ship_types_ids)
-        require_attackers_ship_groups_ids = {
-            int(obj[0]) for obj in form["require_attackers_ship_groups"].options
-        }
-        self.assertIn(self.npc_type.eve_group_id, require_attackers_ship_groups_ids)
