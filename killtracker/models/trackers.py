@@ -38,21 +38,9 @@ from killtracker.app_settings import (
 from killtracker.constants import EveCategoryId, EveGroupId
 from killtracker.core.killmails import Killmail
 from killtracker.exceptions import WebhookTooManyRequests
-from killtracker.managers import EveTypePlusManager, TrackerManager, WebhookManager
+from killtracker.managers import TrackerManager, WebhookManager
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
-
-
-class EveTypePlus(EveType):
-    """Variant to show group names with default output."""
-
-    class Meta:
-        proxy = True
-
-    objects = EveTypePlusManager()
-
-    def __str__(self) -> str:
-        return f"{self.name} ({self.eve_group})"
 
 
 class Webhook(models.Model):
