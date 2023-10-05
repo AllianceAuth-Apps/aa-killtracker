@@ -4,14 +4,13 @@
 
 
 from django.contrib import admin
-from django.http import HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponseRedirect
+from django.shortcuts import render
 from django.utils.safestring import mark_safe
 
 from allianceauth import NAME as site_header
 
 from . import tasks
-from .constants import SESSION_KEY_USES_NPC, EveCategoryId
 from .core.killmails import Killmail
 from .forms import TrackerAdminForm, TrackerAdminKillmailIdForm, field_nice_display
 from .models import EveKillmail, EveKillmailAttacker, Tracker, Webhook
@@ -120,6 +119,7 @@ class TrackerAdmin(admin.ModelAdmin):
         "exclude_attacker_states",
         "require_attacker_states",
         "require_victim_states",
+        "ping_groups",
     )
     fieldsets = (
         (None, {"fields": ("name", "description", "is_enabled", "color")}),
@@ -238,25 +238,6 @@ class TrackerAdmin(admin.ModelAdmin):
             "require_victim_ship_groups",
             "require_victim_ship_types",
             "ping_groups",
-        )
-
-    def change_view(
-        self, request, object_id, form_url="", extra_context=None
-    ) -> HttpResponse:
-        extra_context = extra_context or {}
-        tracker = get_object_or_404(Tracker, pk=object_id)
-        is_using_npc = (
-            tracker.require_attackers_ship_types.filter(
-                eve_group__eve_category_id=EveCategoryId.ENTITY
-            ).exists()
-            or tracker.require_attackers_ship_groups.filter(
-                eve_category_id=EveCategoryId.ENTITY
-            ).exists()
-        )
-        request.session[SESSION_KEY_USES_NPC] = is_using_npc
-        extra_context["is_using_npc"] = is_using_npc
-        return super().change_view(
-            request, object_id, form_url, extra_context=extra_context
         )
 
     def _color(self, obj):
