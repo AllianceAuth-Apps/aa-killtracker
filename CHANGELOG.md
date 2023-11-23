@@ -26,7 +26,7 @@ If you are running multiple instances of Killtracker please choose a different q
 
 ### Changed
 
-- Added the ability to define a queue ID via the new setting `KILLTRACKER_QUEUE_ID`.
+- Added the ability to define a queue ID via the new mandatory setting `KILLTRACKER_QUEUE_ID`.
 
 ## [0.12.1] - 2023-10-05
 

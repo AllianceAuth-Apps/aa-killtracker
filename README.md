@@ -71,19 +71,45 @@ pip install aa-killtracker
 
 ### Step 3 - Configure settings
 
-Configure your Auth settings (`local.py`) as follows:
+Configure your AA settings (`local.py`) as follows:
 
-- Add `'killtracker'` to `INSTALLED_APPS`
-- Add below lines to your settings file:
+### Installed apps
+
+Add `'killtracker'` to `INSTALLED_APPS`.
+
+### Killtracker configuration
+
+Add below lines to your settings file:
 
 ```python
+# aa-killtracker
 CELERYBEAT_SCHEDULE['killtracker_run_killtracker'] = {
     'task': 'killtracker.tasks.run_killtracker',
     'schedule': crontab(minute='*/1'),
 }
+KILLTRACKER_QUEUE_ID = ""  # Put your unique queue ID here
 ```
 
-- Optional: Add additional settings if you want to change any defaults. See [Settings](#settings) for the full list.
+### Queue ID
+
+Please note that the queue ID must be globally unique for all users of the zKillboard API, so choose carefully.
+
+We suggest to use your alliance or corporation name (without any spaces and special characters) as queue ID.
+
+We recommend using only characters (upper and lower case) and numbers,
+but no spaces or any special characters when choosing your ID.
+
+Example (don't use this exact example):
+
+```Python
+KILLTRACKER_QUEUE_ID = "Voltron9000"
+```
+
+If you are running multiple instances of Killtracker please choose a different queue ID for each of them.
+
+### Additional settings (optional)
+
+Add additional settings if you want to change any defaults. See [Settings](#settings) for the full list.
 
 ### Step 4 - Finalize installation
 
