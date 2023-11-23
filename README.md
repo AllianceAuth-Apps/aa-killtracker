@@ -94,7 +94,7 @@ KILLTRACKER_QUEUE_ID = ""  # Put your unique queue ID here
 
 Please note that the queue ID must be globally unique for all users of the zKillboard API, so choose carefully.
 
-We suggest to use your alliance or corporation name (without any spaces and special characters) as queue ID.
+We suggest to use your alliance name or alliance tag (without any spaces and special characters) as queue ID.
 
 We recommend using only characters (upper and lower case) and numbers,
 but no spaces or any special characters when choosing your ID.

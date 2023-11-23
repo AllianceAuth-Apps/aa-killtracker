@@ -15,12 +15,16 @@ With a recent change to the zKillboard API the queue ID is now mandatory. Please
 
 Please note that the queue ID must be globally unique for all users of the zKillboard API, so choose carefully.
 
+We suggest to use your alliance name or alliance tag (without any spaces and special characters) as queue ID.
+
 We recommend using only characters (upper and lower case) and numbers,
 but no spaces or any special characters when choosing your ID.
 
-Example: ``"Voltron9000"`` (don't use this exact example)
+Example (don't use this exact example):
 
-We suggest to use your alliance or corporation name (without any spaces and special characters) as queue ID.
+```Python
+KILLTRACKER_QUEUE_ID = "Voltron9000"
+```
 
 If you are running multiple instances of Killtracker please choose a different queue ID for each of them.
 
