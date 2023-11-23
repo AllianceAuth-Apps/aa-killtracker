@@ -3,15 +3,14 @@ import dhooks_lite
 from app_utils.testing import NoSocketsTestCase
 
 from killtracker.core import discord_messages
-
-from ..testdata.factories import (
+from killtracker.tests.testdata.factories import (
     EveEntityVariant,
     KillmailFactory,
     TrackerFactory,
     random_eve_entity,
 )
-from ..testdata.helpers import load_eve_entities
-from ..testdata.load_eveuniverse import load_eveuniverse
+from killtracker.tests.testdata.helpers import load_eve_entities
+from killtracker.tests.testdata.load_eveuniverse import load_eveuniverse
 
 
 class TestCreateEmbed(NoSocketsTestCase):

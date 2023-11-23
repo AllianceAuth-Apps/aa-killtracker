@@ -7,15 +7,17 @@ from eveuniverse.models import EveEntity
 from app_utils.testing import NoSocketsTestCase
 
 from killtracker.models import EveKillmail
-
-from ..testdata.factories import EveKillmailAttackerFactory, EveKillmailFactory
-from ..testdata.helpers import (
+from killtracker.tests.testdata.factories import (
+    EveKillmailAttackerFactory,
+    EveKillmailFactory,
+)
+from killtracker.tests.testdata.helpers import (
     LoadTestDataMixin,
     load_eve_entities,
     load_eve_killmails,
     load_killmail,
 )
-from ..testdata.load_eveuniverse import load_eveuniverse
+from killtracker.tests.testdata.load_eveuniverse import load_eveuniverse
 
 MODELS_PATH = "killtracker.models.killmails"
 

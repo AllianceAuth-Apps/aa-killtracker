@@ -6,6 +6,7 @@ import requests_mock
 from redis.exceptions import LockError
 
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase
 from django.utils.dateparse import parse_datetime
 from django.utils.timezone import now
@@ -20,18 +21,19 @@ from killtracker.core.killmails import (
     _EntityCount,
 )
 from killtracker.exceptions import KillmailDoesNotExist
-
-from .. import CacheStub
-from ..testdata.factories import KillmailFactory
-from ..testdata.helpers import killmails_data, load_killmail
+from killtracker.tests import CacheStub
+from killtracker.tests.testdata.factories import KillmailFactory
+from killtracker.tests.testdata.helpers import killmails_data, load_killmail
 
 MODULE_PATH = "killtracker.core.killmails"
 unittest.util._MAX_LENGTH = 1000
+requests_mock.mock.case_sensitive = True
 
 
 @requests_mock.Mocker()
 @patch(MODULE_PATH + ".get_redis_client")
 class TestCreateFromZkbRedisq(NoSocketsTestCase):
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_return_killmail(self, requests_mocker, mock_redis):
         # given
         requests_mocker.register_uri(
@@ -71,6 +73,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         self.assertFalse(killmail.zkb.is_solo)
         self.assertFalse(killmail.zkb.is_awox)
 
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_return_none_when_zkb_returns_empty_package(
         self, requests_mocker, mock_redis
     ):
@@ -83,6 +86,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         # then
         self.assertIsNone(killmail)
 
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_handle_zkb_data_has_no_solar_system(
         self, requests_mocker, mock_redis
     ):
@@ -98,6 +102,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         # then
         self.assertIsNotNone(killmail)
 
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_return_none_when_zkb_returns_429_error(
         self, requests_mocker, mock_redis
     ):
@@ -110,6 +115,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         # then
         self.assertIsNone(killmail)
 
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_return_none_when_zkb_returns_general_error(
         self, requests_mocker, mock_redis
     ):
@@ -127,6 +133,7 @@ You can only have one request to listen.php in flight at any time, otherwise you
         # then
         self.assertIsNone(killmail)
 
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_return_none_when_zkb_does_not_return_json(
         self, requests_mocker, mock_redis
     ):
@@ -139,6 +146,7 @@ You can only have one request to listen.php in flight at any time, otherwise you
         # then
         self.assertIsNone(killmail)
 
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_return_none_if_lock_not_acquired(self, requests_mocker, mock_redis):
         # given
         mock_redis.return_value.lock.side_effect = LockError
@@ -146,6 +154,56 @@ You can only have one request to listen.php in flight at any time, otherwise you
         killmail = Killmail.create_from_zkb_redisq()
         # then
         self.assertIsNone(killmail)
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "Voltron9000")
+    def test_should_have_queue_id_in_request(self, requests_mocker, mock_redis):
+        # given
+        requests_mocker.register_uri(
+            "GET", ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when
+        Killmail.create_from_zkb_redisq()
+        # then
+        qs = requests_mocker.last_request.qs
+        self.assertIn("queueID", qs)
+        queue_id = qs["queueID"]
+        self.assertEqual(len(queue_id), 1)
+        self.assertEqual(queue_id[0], "Voltron9000")
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "")
+    def test_should_abort_when_no_queue_id_defined(self, requests_mocker, mock_redis):
+        # given
+        requests_mocker.register_uri(
+            "GET", ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when/then
+        with self.assertRaises(ImproperlyConfigured):
+            Killmail.create_from_zkb_redisq()
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "Möchtegern")
+    def test_should_urlize_queue_ids(self, requests_mocker, mock_redis):
+        # given
+        requests_mocker.register_uri(
+            "GET", ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when
+        Killmail.create_from_zkb_redisq()
+        # then
+        qs = requests_mocker.last_request.qs
+        self.assertIn("queueID", qs)
+        queue_id = qs["queueID"]
+        self.assertEqual(len(queue_id), 1)
+        self.assertEqual(queue_id[0], "M%C3%B6chtegern")
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "alpha,bravo")
+    def test_should_not_accept_list_for_queue_id(self, requests_mocker, mock_redis):
+        # given
+        requests_mocker.register_uri(
+            "GET", ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when/then
+        with self.assertRaises(ImproperlyConfigured):
+            Killmail.create_from_zkb_redisq()
 
 
 class TestKillmailSerialization(NoSocketsTestCase):

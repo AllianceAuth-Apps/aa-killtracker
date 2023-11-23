@@ -18,6 +18,7 @@ PACKAGE_PATH = "killtracker"
 
 @patch("celery.app.task.Context.called_directly", False)  # make retry work with eager
 @override_settings(CELERY_ALWAYS_EAGER=True)
+@patch(PACKAGE_PATH + ".core.killmails.KILLTRACKER_QUEUE_ID", "dummy")
 @patch(PACKAGE_PATH + ".tasks.is_esi_online", lambda: True)
 @patch(PACKAGE_PATH + ".models.webhooks.dhooks_lite.Webhook.execute", spec=True)
 @requests_mock.Mocker()

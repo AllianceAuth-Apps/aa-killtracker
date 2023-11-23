@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from http import HTTPStatus
 from typing import List, Optional, Set
+from urllib.parse import quote_plus
 
 import requests
 from dacite import DaciteError, from_dict
@@ -16,6 +17,7 @@ from simplejson.errors import JSONDecodeError
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.dateparse import parse_datetime
 from eveuniverse.models import EveType
 
@@ -26,6 +28,7 @@ from app_utils.logging import LoggerAddTag
 
 from killtracker import USER_AGENT_TEXT, __title__
 from killtracker.app_settings import (
+    KILLTRACKER_QUEUE_ID,
     KILLTRACKER_REDISQ_LOCK_TIMEOUT,
     KILLTRACKER_REDISQ_TTW,
     KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
@@ -42,6 +45,8 @@ REQUESTS_TIMEOUT = (5, 30)
 
 MAIN_MINIMUM_COUNT = 2
 MAIN_MINIMUM_SHARE = 0.25
+
+# TODO: Factor out logic for accessing the API to another module
 
 
 @dataclass
@@ -385,15 +390,27 @@ class Killmail(_KillmailBase):
 
         Returns None if no killmail is received.
         """
-        logger.info("Trying to fetch killmail from ZKB RedisQ...")
+        if not KILLTRACKER_QUEUE_ID:
+            raise ImproperlyConfigured(
+                "You need to define a queue ID in your settings."
+            )
+
+        if "," in KILLTRACKER_QUEUE_ID:
+            raise ImproperlyConfigured("A queue ID must not contains commas.")
+
         redis = get_redis_client()
+        params = {
+            "queueID": quote_plus(KILLTRACKER_QUEUE_ID),
+            "ttw": KILLTRACKER_REDISQ_TTW,
+        }
         try:
+            logger.info("Trying to fetch killmail from ZKB RedisQ...")
             with redis.lock(
                 cls.lock_key(), blocking_timeout=KILLTRACKER_REDISQ_LOCK_TIMEOUT
             ):
                 response = requests.get(
                     ZKB_REDISQ_URL,
-                    params={"ttw": KILLTRACKER_REDISQ_TTW},
+                    params=params,
                     timeout=REQUESTS_TIMEOUT,
                     headers={"User-Agent": USER_AGENT_TEXT},
                 )
@@ -407,7 +424,9 @@ class Killmail(_KillmailBase):
         if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
             logger.error("429 Client Error: Too many requests: %s", response.text)
             return None
+
         response.raise_for_status()
+
         try:
             data = response.json()
         except JSONDecodeError:

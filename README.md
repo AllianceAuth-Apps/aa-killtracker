@@ -1,4 +1,4 @@
-# killtracker
+# Killtracker
 
 An app for running killmail trackers with Alliance Auth and Discord.
 
@@ -71,19 +71,45 @@ pip install aa-killtracker
 
 ### Step 3 - Configure settings
 
-Configure your Auth settings (`local.py`) as follows:
+Configure your AA settings (`local.py`) as follows:
 
-- Add `'killtracker'` to `INSTALLED_APPS`
-- Add below lines to your settings file:
+### Installed apps
+
+Add `'killtracker'` to `INSTALLED_APPS`.
+
+### Killtracker configuration
+
+Add below lines to your settings file:
 
 ```python
+# aa-killtracker
 CELERYBEAT_SCHEDULE['killtracker_run_killtracker'] = {
     'task': 'killtracker.tasks.run_killtracker',
     'schedule': crontab(minute='*/1'),
 }
+KILLTRACKER_QUEUE_ID = ""  # Put your unique queue ID here
 ```
 
-- Optional: Add additional settings if you want to change any defaults. See [Settings](#settings) for the full list.
+### Queue ID
+
+Please note that the queue ID must be globally unique for all users of the zKillboard API, so choose carefully.
+
+We suggest to use your alliance or corporation name (without any spaces and special characters) as queue ID.
+
+We recommend using only characters (upper and lower case) and numbers,
+but no spaces or any special characters when choosing your ID.
+
+Example (don't use this exact example):
+
+```Python
+KILLTRACKER_QUEUE_ID = "Voltron9000"
+```
+
+If you are running multiple instances of Killtracker please choose a different queue ID for each of them.
+
+### Additional settings (optional)
+
+Add additional settings if you want to change any defaults. See [Settings](#settings) for the full list.
 
 ### Step 4 - Finalize installation
 
@@ -184,5 +210,6 @@ Name | Description | Default
 `KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER`| Ignore killmails that are older than the given number in minutes. Sometimes killmails appear belated on ZKB, this feature ensures they don't create new alerts | `60`
 `KILLTRACKER_MAX_KILLMAILS_PER_RUN`| Maximum number of killmails retrieved from ZKB by task run. This value should be set such that the task that fetches new killmails from ZKB every minute will reliable finish within one minute. To test this run a "Catch all" tracker and see how many killmails your system is capable of processing. Note that you can get that information from the worker's log file. It will look something like this: `Total killmails received from ZKB in 49 secs: 251`   | `250`
 `KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS`| Killmails older than set number of days will be purged from the database. If you want to keep all killmails set this to 0. Note that this setting is only relevant if you have storing killmails enabled.  | `30`
-`KILLTRACKER_WEBHOOK_SET_AVATAR`| Wether app sets the name and avatar icon of a webhook. When False the webhook will use it's own values as set on the platform  | `True`
+`KILLTRACKER_QUEUE_ID`| Unique ID used to identify this server when fetching killmails from zKillboard. This setting is mandatory.  | ``
 `KILLTRACKER_STORING_KILLMAILS_ENABLED`| If set to true Killtracker will automatically store all received killmails in the local database. This can be useful if you want to run analytics on killmails etc. However, please note that Killtracker itself currently does not use stored killmails in any way.  | `False`
+`KILLTRACKER_WEBHOOK_SET_AVATAR`| Wether app sets the name and avatar icon of a webhook. When False the webhook will use it's own values as set on the platform  | `True`
