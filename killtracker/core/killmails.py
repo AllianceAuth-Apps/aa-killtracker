@@ -17,6 +17,7 @@ from simplejson.errors import JSONDecodeError
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.dateparse import parse_datetime
 from eveuniverse.models import EveType
 
@@ -387,14 +388,18 @@ class Killmail(_KillmailBase):
 
         Returns None if no killmail is received.
         """
-        logger.info("Trying to fetch killmail from ZKB RedisQ...")
+        if not KILLTRACKER_QUEUE_ID:
+            raise ImproperlyConfigured(
+                "You need to define a queue ID in your settings."
+            )
+
         redis = get_redis_client()
-
-        params = {"ttw": KILLTRACKER_REDISQ_TTW}
-        if KILLTRACKER_QUEUE_ID:
-            params["queueID"] = quote_plus(KILLTRACKER_QUEUE_ID)
-
+        params = {
+            "queueID": quote_plus(KILLTRACKER_QUEUE_ID),
+            "ttw": KILLTRACKER_REDISQ_TTW,
+        }
         try:
+            logger.info("Trying to fetch killmail from ZKB RedisQ...")
             with redis.lock(
                 cls.lock_key(), blocking_timeout=KILLTRACKER_REDISQ_LOCK_TIMEOUT
             ):
