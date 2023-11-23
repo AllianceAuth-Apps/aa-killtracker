@@ -26,6 +26,7 @@ from killtracker.tests.testdata.helpers import killmails_data, load_killmail
 
 MODULE_PATH = "killtracker.core.killmails"
 unittest.util._MAX_LENGTH = 1000
+requests_mock.mock.case_sensitive = True
 
 
 @requests_mock.Mocker()
@@ -145,6 +146,50 @@ You can only have one request to listen.php in flight at any time, otherwise you
         killmail = Killmail.create_from_zkb_redisq()
         # then
         self.assertIsNone(killmail)
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "Voltron9000")
+    def test_should_have_queue_id_in_request(self, requests_mocker, mock_redis):
+        # given
+        requests_mocker.register_uri(
+            "GET", ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when
+        Killmail.create_from_zkb_redisq()
+        # then
+        qs = requests_mocker.last_request.qs
+        self.assertIn("queueID", qs)
+        queue_id = qs["queueID"]
+        self.assertEqual(len(queue_id), 1)
+        self.assertEqual(queue_id[0], "Voltron9000")
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "")
+    def test_should_not_have_queue_id_in_request_when_setting_not_defined(
+        self, requests_mocker, mock_redis
+    ):
+        # given
+        requests_mocker.register_uri(
+            "GET", ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when
+        Killmail.create_from_zkb_redisq()
+        # then
+        qs = requests_mocker.last_request.qs
+        self.assertNotIn("queueID", qs)
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "Möchtegern")
+    def test_should_urlize_queue_ids(self, requests_mocker, mock_redis):
+        # given
+        requests_mocker.register_uri(
+            "GET", ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when
+        Killmail.create_from_zkb_redisq()
+        # then
+        qs = requests_mocker.last_request.qs
+        self.assertIn("queueID", qs)
+        queue_id = qs["queueID"]
+        self.assertEqual(len(queue_id), 1)
+        self.assertEqual(queue_id[0], "M%C3%B6chtegern")
 
 
 class TestKillmailSerialization(NoSocketsTestCase):

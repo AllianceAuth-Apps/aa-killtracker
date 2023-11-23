@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [0.13.0] - TBD
+
+### Update notes
+
+With a recent change to the zKillboard API the queue ID became mandatory. Please add your queue ID via the new setting `KILLTRACKER_QUEUE_ID` in your local settings.
+
+Please note that the queue ID must be globally unique for all users of the zKillboard API, so choose carefully.
+
+We recommend using only characters (including upper and lower case) and numbers,
+but no spaces or any special characters when choosing your ID.
+
+Example: ``"Voltron9000"`` (don't use this exact example though)
+
+We suggest to use your alliance or corporation name (without any spaces and special characters) as queue ID.
+
+If you are running multiple instances of Killtracker please choose a different queue ID for each of them.
+
+### Changed
+
+- Added the ability to define a queue ID via the new setting `KILLTRACKER_QUEUE_ID`.
+
 ## [0.12.1] - 2023-10-05
 
 ### Changed

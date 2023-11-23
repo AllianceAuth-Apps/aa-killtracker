@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from http import HTTPStatus
 from typing import List, Optional, Set
+from urllib.parse import quote_plus
 
 import requests
 from dacite import DaciteError, from_dict
@@ -26,6 +27,7 @@ from app_utils.logging import LoggerAddTag
 
 from killtracker import USER_AGENT_TEXT, __title__
 from killtracker.app_settings import (
+    KILLTRACKER_QUEUE_ID,
     KILLTRACKER_REDISQ_LOCK_TIMEOUT,
     KILLTRACKER_REDISQ_TTW,
     KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
@@ -387,13 +389,18 @@ class Killmail(_KillmailBase):
         """
         logger.info("Trying to fetch killmail from ZKB RedisQ...")
         redis = get_redis_client()
+
+        params = {"ttw": KILLTRACKER_REDISQ_TTW}
+        if KILLTRACKER_QUEUE_ID:
+            params["queueID"] = quote_plus(KILLTRACKER_QUEUE_ID)
+
         try:
             with redis.lock(
                 cls.lock_key(), blocking_timeout=KILLTRACKER_REDISQ_LOCK_TIMEOUT
             ):
                 response = requests.get(
                     ZKB_REDISQ_URL,
-                    params={"ttw": KILLTRACKER_REDISQ_TTW},
+                    params=params,
                     timeout=REQUESTS_TIMEOUT,
                     headers={"User-Agent": USER_AGENT_TEXT},
                 )
@@ -407,7 +414,9 @@ class Killmail(_KillmailBase):
         if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
             logger.error("429 Client Error: Too many requests: %s", response.text)
             return None
+
         response.raise_for_status()
+
         try:
             data = response.json()
         except JSONDecodeError:

@@ -25,6 +25,24 @@ KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS = clean_setting(
 If you want to keep all killmails set this to 0.
 """
 
+KILLTRACKER_QUEUE_ID = clean_setting("KILLTRACKER_QUEUE_ID", "")
+"""Unique ID used to identify this server when fetching killmails from zKillboard.
+
+Please note that the queue ID must be globally unique for all users of the zKillboard API, so choose carefully.
+
+We recommend using only characters (including upper and lower case) and numbers,
+but no spaces or any special characters when choosing your ID.
+
+Example: ``"Voltron9000"`` (don't use this exact example though)
+
+We suggest to use your alliance or corporation name (without spaces and special characters) as queue ID.
+
+If you are running multiple instances of Killtracker please choose a different queue ID for each of them.
+
+This setting is mandatory.
+"""
+
+
 KILLTRACKER_STORING_KILLMAILS_ENABLED = clean_setting(
     "KILLTRACKER_STORING_KILLMAILS_ENABLED", False
 )
@@ -39,6 +57,7 @@ KILLTRACKER_SHOW_NPC_TYPES = clean_setting("KILLTRACKER_SHOW_NPC_TYPES", True)
 """Wether NPC types (e.g. Guristas Assaulter) can be selected as attacker types
 when creating trackers.
 """
+
 
 #####################
 # INTERNAL SETTINGS
