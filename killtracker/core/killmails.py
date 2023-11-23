@@ -46,6 +46,8 @@ REQUESTS_TIMEOUT = (5, 30)
 MAIN_MINIMUM_COUNT = 2
 MAIN_MINIMUM_SHARE = 0.25
 
+# TODO: Factor out logic for accessing the API to another module
+
 
 @dataclass
 class _KillmailBase:
@@ -392,6 +394,9 @@ class Killmail(_KillmailBase):
             raise ImproperlyConfigured(
                 "You need to define a queue ID in your settings."
             )
+
+        if "," in KILLTRACKER_QUEUE_ID:
+            raise ImproperlyConfigured("A queue ID must not contains commas.")
 
         redis = get_redis_client()
         params = {

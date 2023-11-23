@@ -195,6 +195,16 @@ You can only have one request to listen.php in flight at any time, otherwise you
         self.assertEqual(len(queue_id), 1)
         self.assertEqual(queue_id[0], "M%C3%B6chtegern")
 
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "alpha,bravo")
+    def test_should_not_accept_list_for_queue_id(self, requests_mocker, mock_redis):
+        # given
+        requests_mocker.register_uri(
+            "GET", ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when/then
+        with self.assertRaises(ImproperlyConfigured):
+            Killmail.create_from_zkb_redisq()
+
 
 class TestKillmailSerialization(NoSocketsTestCase):
     def test_dict_serialization(self):
