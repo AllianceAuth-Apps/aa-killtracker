@@ -9,9 +9,8 @@ from eveuniverse.models import EveConstellation, EveRegion, EveSolarSystem, EveT
 from app_utils.testing import NoSocketsTestCase
 
 from killtracker.core.killmails import Killmail
-
-from ..testdata.factories import TrackerFactory
-from ..testdata.helpers import LoadTestDataMixin, load_killmail
+from killtracker.tests.testdata.factories import TrackerFactory
+from killtracker.tests.testdata.helpers import LoadTestDataMixin, load_killmail
 
 MODELS_PATH = "killtracker.models.trackers"
 

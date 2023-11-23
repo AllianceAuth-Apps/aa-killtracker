@@ -10,9 +10,8 @@ from app_utils.django import app_labels
 
 from killtracker.core.killmails import Killmail
 from killtracker.models import Tracker
-
-from ..testdata.factories import TrackerFactory
-from ..testdata.helpers import LoadTestDataMixin, load_killmail
+from killtracker.tests.testdata.factories import TrackerFactory
+from killtracker.tests.testdata.helpers import LoadTestDataMixin, load_killmail
 
 DISCORD_MESSAGES_PATH = "killtracker.core.discord_messages"
 

@@ -20,10 +20,9 @@ from killtracker.core.killmails import (
     _EntityCount,
 )
 from killtracker.exceptions import KillmailDoesNotExist
-
-from .. import CacheStub
-from ..testdata.factories import KillmailFactory
-from ..testdata.helpers import killmails_data, load_killmail
+from killtracker.tests import CacheStub
+from killtracker.tests.testdata.factories import KillmailFactory
+from killtracker.tests.testdata.helpers import killmails_data, load_killmail
 
 MODULE_PATH = "killtracker.core.killmails"
 unittest.util._MAX_LENGTH = 1000

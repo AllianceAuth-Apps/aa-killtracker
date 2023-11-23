@@ -22,14 +22,13 @@ from app_utils.testing import NoSocketsTestCase, add_character_to_user_2
 from killtracker.constants import EveGroupId
 from killtracker.core.killmails import Killmail, _EntityCount
 from killtracker.models import Tracker
-
-from ..testdata.factories import (
+from killtracker.tests.testdata.factories import (
     KillmailAttackerFactory,
     KillmailFactory,
     KillmailVictimFactory,
     TrackerFactory,
 )
-from ..testdata.helpers import LoadTestDataMixin, load_killmail
+from killtracker.tests.testdata.helpers import LoadTestDataMixin, load_killmail
 
 MODELS_PATH = "killtracker.models"
 
