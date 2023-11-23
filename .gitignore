@@ -8,7 +8,7 @@ dist/
 build/
 *.egg-info/
 coverage.xml
-.coverage
+.coverage*
 .tox/
 htmlcov/
 .mypy_cache
