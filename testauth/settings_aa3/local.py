@@ -19,6 +19,9 @@ SITE_NAME = "testauth"
 # Make sure this URL is WITHOUT a trailing slash
 SITE_URL = "http://127.0.0.1:8000"
 
+# Django security
+CSRF_TRUSTED_ORIGINS = [SITE_URL]
+
 # Change this to enable/disable debug mode, which displays
 # useful error messages but can leak sensitive data.
 DEBUG = False

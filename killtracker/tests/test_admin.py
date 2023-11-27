@@ -62,7 +62,7 @@ class TestTrackerValidations(LoadTestDataMixin, WebTest):
         # user tries to add new notification rule
         add_page = self.app.get(self.url_add)
         self.assertEqual(add_page.status_code, 200)
-        form = add_page.form
+        form = add_page.forms["tracker_form"]
         form["name"] = "Test Tracker"
         form["webhook"] = self.webhook_1.pk
         return form
