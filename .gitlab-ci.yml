@@ -58,6 +58,13 @@ test-311-django40:
   - tox -e py311-django40
   - bash <(curl -s https://codecov.io/bash)
 
+test-311-django42:
+  extends: .tox_setup
+  image: python:3.11-bullseye
+  script:
+  - tox -e py311-django42
+  - bash <(curl -s https://codecov.io/bash)
+
 deploy-pypi:
   stage: deploy
   image: python:3.10-bullseye
