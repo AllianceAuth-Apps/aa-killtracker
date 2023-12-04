@@ -61,6 +61,8 @@ And here is how posted killmails look on Discord:
 
 2. Killtracker needs the app [django-eveuniverse](https://gitlab.com/ErikKalkoken/django-eveuniverse) to function. Please make sure it is installed, before continuing.
 
+3. Killtracker will generate a lot of tasks. For optimal performance we recommend a threads-based configuration of your celery workers. Please see [this guide](https://aa-memberaudit.readthedocs.io/en/latest/operations.html#configuring-celery-workers) for details.
+
 ### Step 2 - Install app
 
 Make sure you are in the virtual environment (venv) of your Alliance Auth installation. Then install the newest release from PyPI:
@@ -149,6 +151,8 @@ First need to add the Discord webhook that points to the channel you want your k
 To test that your webhook works correctly you can send a test notification.
 
 Next you can create your trackers under **Tracker**. Make sure you link each tracker to the right webhook. Once you save a tracker that is **enabled** it will start working.
+
+>**Hint**:<br>A common mistake is to set both attacker alliance and victim alliance to your alliance in the same tracker. This will only match awox kills though, which is usually not what you want. Instead create separate trackers to capture kills and losses for your alliance.
 
 As final test that your setup is correct you may want to create a "Catch all" tracker. for that just create a new tracker without any conditions and it will forward all killmails to your Discord channel as they are received.
 
