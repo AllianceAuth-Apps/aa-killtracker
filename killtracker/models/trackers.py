@@ -554,6 +554,7 @@ class Tracker(models.Model):
             is_matching = self._match_value(killmail, is_matching)
             is_matching, jumps, distance = self._match_geography(killmail, is_matching)
             is_matching = self._match_attackers(killmail, is_matching)
+            is_matching = self._match_states(killmail, is_matching)
             is_matching, matching_ship_type_ids = self._match_attacker_ships(
                 killmail, is_matching, matching_ship_type_ids
             )
@@ -672,7 +673,6 @@ class Tracker(models.Model):
             jumps = None
         return (jumps, distance)
 
-    # pylint: disable=too-many-branches
     def _match_attackers(self, killmail: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_min_attackers:
             is_matching = len(killmail.attackers) >= self.require_min_attackers
@@ -727,6 +727,9 @@ class Tracker(models.Model):
                         corporation_id__in=killmail.attackers_distinct_corporation_ids()
                     ).exists()
 
+        return is_matching
+
+    def _match_states(self, killmail: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_attacker_states.exists():
             is_matching = User.objects.filter(
                 profile__state__in=list(self.require_attacker_states.all()),
@@ -740,6 +743,14 @@ class Tracker(models.Model):
                 profile__state__in=list(self.exclude_attacker_states.all()),
                 character_ownerships__character__character_id__in=(
                     killmail.attackers_distinct_character_ids()
+                ),
+            ).exists()
+
+        if is_matching and self.require_victim_states.exists():
+            is_matching = User.objects.filter(
+                profile__state__in=list(self.require_victim_states.all()),
+                character_ownerships__character__character_id=(
+                    killmail.victim.character_id
                 ),
             ).exists()
 
@@ -832,14 +843,6 @@ class Tracker(models.Model):
         if is_matching and self.exclude_victim_factions.exists():
             is_matching = self.exclude_victim_factions.exclude(
                 faction_id=killmail.victim.faction_id
-            ).exists()
-
-        if is_matching and self.require_victim_states.exists():
-            is_matching = User.objects.filter(
-                profile__state__in=list(self.require_victim_states.all()),
-                character_ownerships__character__character_id=(
-                    killmail.victim.character_id
-                ),
             ).exists()
 
         return is_matching
