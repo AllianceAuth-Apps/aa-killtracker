@@ -6,8 +6,11 @@ from typing import Generic, Set, TypeVar
 import factory
 import factory.fuzzy
 
+from django.db.models import Max
 from django.utils.timezone import now
 from eveuniverse.models import EveEntity
+
+from allianceauth.eveonline.models import EveFactionInfo
 
 from killtracker.app_settings import KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER
 from killtracker.constants import EveCategoryId
@@ -109,6 +112,26 @@ def random_eve_entity(variant: EveEntityVariant):
 class BaseMetaFactory(Generic[T], factory.base.FactoryMetaClass):
     def __call__(cls, *args, **kwargs) -> T:
         return super().__call__(*args, **kwargs)
+
+
+class EveFactionInfoFactory(
+    factory.django.DjangoModelFactory, metaclass=BaseMetaFactory[EveFactionInfo]
+):
+    """Generate an EveFactionInfo object."""
+
+    class Meta:
+        model = EveFactionInfo
+        django_get_or_create = ("faction_id", "faction_name")
+
+    faction_name = factory.Faker("catch_phrase")
+
+    @factory.lazy_attribute
+    def faction_id(self):
+        last_id = (
+            EveFactionInfo.objects.aggregate(Max("faction_id"))["faction_id__max"]
+            or 500_000
+        )
+        return last_id + 1
 
 
 class KillmailCharacterFactory(

@@ -262,6 +262,12 @@ class TestKillmailBasics(NoSocketsTestCase):
         # then
         self.assertSetEqual(set(result), {3001})
 
+    def test_should_return_attacker_faction_ids(self):
+        # when
+        result = self.killmail.attackers_distinct_faction_ids()
+        # then
+        self.assertSetEqual(set(result), {500001})
+
     def test_should_return_attacker_corporation_ids(self):
         # when
         result = self.killmail.attackers_distinct_corporation_ids()

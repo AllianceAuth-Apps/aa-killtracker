@@ -17,7 +17,11 @@ from eveuniverse.models import (
 )
 
 from allianceauth.authentication.models import State
-from allianceauth.eveonline.models import EveAllianceInfo, EveCorporationInfo
+from allianceauth.eveonline.models import (
+    EveAllianceInfo,
+    EveCorporationInfo,
+    EveFactionInfo,
+)
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.logging import LoggerAddTag
 
@@ -170,6 +174,25 @@ class Tracker(models.Model):
         blank=True,
         help_text="Only include killmails with attackers from one of these alliances. ",
     )
+    require_victim_alliances = models.ManyToManyField(
+        EveAllianceInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where the victim belongs "
+            "to one of these alliances. "
+        ),
+    )
+    exclude_victim_alliances = models.ManyToManyField(
+        EveAllianceInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Exclude killmails where the victim belongs to one of these alliances. "
+        ),
+    )
     exclude_attacker_corporations = models.ManyToManyField(
         EveCorporationInfo,
         related_name="+",
@@ -196,6 +219,25 @@ class Tracker(models.Model):
             "has the final blow."
         ),
     )
+    require_victim_corporations = models.ManyToManyField(
+        EveCorporationInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where the victim belongs "
+            "to one of these corporations. "
+        ),
+    )
+    exclude_victim_corporations = models.ManyToManyField(
+        EveCorporationInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Exclude killmails where the victim belongs to one of these corporations. "
+        ),
+    )
     exclude_attacker_states = models.ManyToManyField(
         State,
         related_name="+",
@@ -216,42 +258,13 @@ class Tracker(models.Model):
             "to users with these Auth states. "
         ),
     )
-    require_victim_alliances = models.ManyToManyField(
-        EveAllianceInfo,
+    exclude_victim_states = models.ManyToManyField(
+        State,
         related_name="+",
         default=None,
         blank=True,
         help_text=(
-            "Only include killmails where the victim belongs "
-            "to one of these alliances. "
-        ),
-    )
-    exclude_victim_alliances = models.ManyToManyField(
-        EveAllianceInfo,
-        related_name="+",
-        default=None,
-        blank=True,
-        help_text=(
-            "Exclude killmails where the victim belongs to one of these alliances. "
-        ),
-    )
-    require_victim_corporations = models.ManyToManyField(
-        EveCorporationInfo,
-        related_name="+",
-        default=None,
-        blank=True,
-        help_text=(
-            "Only include killmails where the victim belongs "
-            "to one of these corporations. "
-        ),
-    )
-    exclude_victim_corporations = models.ManyToManyField(
-        EveCorporationInfo,
-        related_name="+",
-        default=None,
-        blank=True,
-        help_text=(
-            "Exclude killmails where the victim belongs to one of these corporations. "
+            "Exclude killmails where the victim belongs to one of these Auth states. "
         ),
     )
     require_victim_states = models.ManyToManyField(
@@ -262,6 +275,41 @@ class Tracker(models.Model):
         help_text=(
             "Only include killmails where the victim characters belong "
             "to users with these Auth states. "
+        ),
+    )
+    exclude_attacker_factions = models.ManyToManyField(
+        EveFactionInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text="Exclude killmails with attackers from one of these factions. ",
+    )
+    require_attacker_factions = models.ManyToManyField(
+        EveFactionInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails with attackers from one of these factions. "
+        ),
+    )
+    require_victim_factions = models.ManyToManyField(
+        EveFactionInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where the victim belongs "
+            "to one of these factions. "
+        ),
+    )
+    exclude_victim_factions = models.ManyToManyField(
+        EveFactionInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Exclude killmails where the victim belongs to one of these factions. "
         ),
     )
     identify_fleets = models.BooleanField(
@@ -506,6 +554,7 @@ class Tracker(models.Model):
             is_matching = self._match_value(killmail, is_matching)
             is_matching, jumps, distance = self._match_geography(killmail, is_matching)
             is_matching = self._match_attackers(killmail, is_matching)
+            is_matching = self._match_states(killmail, is_matching)
             is_matching, matching_ship_type_ids = self._match_attacker_ships(
                 killmail, is_matching, matching_ship_type_ids
             )
@@ -641,6 +690,16 @@ class Tracker(models.Model):
                 corporation_id__in=killmail.attackers_distinct_corporation_ids()
             ).exists()
 
+        if is_matching and self.require_attacker_factions.exists():
+            is_matching = self.require_attacker_factions.filter(
+                faction_id__in=killmail.attackers_distinct_faction_ids()
+            ).exists()
+
+        if is_matching and self.exclude_attacker_factions.exists():
+            is_matching = self.exclude_attacker_factions.exclude(
+                faction_id__in=killmail.attackers_distinct_faction_ids()
+            ).exists()
+
         if is_matching:
             if self.require_attacker_organizations_final_blow:
                 attacker_final_blow = killmail.attacker_final_blow()
@@ -668,6 +727,9 @@ class Tracker(models.Model):
                         corporation_id__in=killmail.attackers_distinct_corporation_ids()
                     ).exists()
 
+        return is_matching
+
+    def _match_states(self, killmail: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_attacker_states.exists():
             is_matching = User.objects.filter(
                 profile__state__in=list(self.require_attacker_states.all()),
@@ -681,6 +743,14 @@ class Tracker(models.Model):
                 profile__state__in=list(self.exclude_attacker_states.all()),
                 character_ownerships__character__character_id__in=(
                     killmail.attackers_distinct_character_ids()
+                ),
+            ).exists()
+
+        if is_matching and self.require_victim_states.exists():
+            is_matching = User.objects.filter(
+                profile__state__in=list(self.require_victim_states.all()),
+                character_ownerships__character__character_id=(
+                    killmail.victim.character_id
                 ),
             ).exists()
 
@@ -765,12 +835,14 @@ class Tracker(models.Model):
                 corporation_id=killmail.victim.corporation_id
             ).exists()
 
-        if is_matching and self.require_victim_states.exists():
-            is_matching = User.objects.filter(
-                profile__state__in=list(self.require_victim_states.all()),
-                character_ownerships__character__character_id=(
-                    killmail.victim.character_id
-                ),
+        if is_matching and self.require_victim_factions.exists():
+            is_matching = self.require_victim_factions.filter(
+                faction_id=killmail.victim.faction_id
+            ).exists()
+
+        if is_matching and self.exclude_victim_factions.exists():
+            is_matching = self.exclude_victim_factions.exclude(
+                faction_id=killmail.victim.faction_id
             ).exists()
 
         return is_matching
