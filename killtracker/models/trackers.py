@@ -672,6 +672,7 @@ class Tracker(models.Model):
             jumps = None
         return (jumps, distance)
 
+    # pylint: disable=too-many-branches
     def _match_attackers(self, killmail: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_min_attackers:
             is_matching = len(killmail.attackers) >= self.require_min_attackers
@@ -687,6 +688,16 @@ class Tracker(models.Model):
         if is_matching and self.exclude_attacker_corporations.exists():
             is_matching = self.exclude_attacker_corporations.exclude(
                 corporation_id__in=killmail.attackers_distinct_corporation_ids()
+            ).exists()
+
+        if is_matching and self.require_attacker_factions.exists():
+            is_matching = self.require_attacker_factions.filter(
+                faction_id__in=killmail.attackers_distinct_faction_ids()
+            ).exists()
+
+        if is_matching and self.exclude_attacker_factions.exists():
+            is_matching = self.exclude_attacker_factions.exclude(
+                faction_id__in=killmail.attackers_distinct_faction_ids()
             ).exists()
 
         if is_matching:
@@ -811,6 +822,16 @@ class Tracker(models.Model):
         if is_matching and self.exclude_victim_corporations.exists():
             is_matching = self.exclude_victim_corporations.exclude(
                 corporation_id=killmail.victim.corporation_id
+            ).exists()
+
+        if is_matching and self.require_victim_factions.exists():
+            is_matching = self.require_victim_factions.filter(
+                faction_id=killmail.victim.faction_id
+            ).exists()
+
+        if is_matching and self.exclude_victim_factions.exists():
+            is_matching = self.exclude_victim_factions.exclude(
+                faction_id=killmail.victim.faction_id
             ).exists()
 
         if is_matching and self.require_victim_states.exists():
