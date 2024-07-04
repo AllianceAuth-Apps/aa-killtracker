@@ -17,7 +17,11 @@ from eveuniverse.models import (
 )
 
 from allianceauth.authentication.models import State
-from allianceauth.eveonline.models import EveAllianceInfo, EveCorporationInfo
+from allianceauth.eveonline.models import (
+    EveAllianceInfo,
+    EveCorporationInfo,
+    EveFactionInfo,
+)
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.logging import LoggerAddTag
 
@@ -170,6 +174,25 @@ class Tracker(models.Model):
         blank=True,
         help_text="Only include killmails with attackers from one of these alliances. ",
     )
+    require_victim_alliances = models.ManyToManyField(
+        EveAllianceInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where the victim belongs "
+            "to one of these alliances. "
+        ),
+    )
+    exclude_victim_alliances = models.ManyToManyField(
+        EveAllianceInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Exclude killmails where the victim belongs to one of these alliances. "
+        ),
+    )
     exclude_attacker_corporations = models.ManyToManyField(
         EveCorporationInfo,
         related_name="+",
@@ -196,6 +219,25 @@ class Tracker(models.Model):
             "has the final blow."
         ),
     )
+    require_victim_corporations = models.ManyToManyField(
+        EveCorporationInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where the victim belongs "
+            "to one of these corporations. "
+        ),
+    )
+    exclude_victim_corporations = models.ManyToManyField(
+        EveCorporationInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Exclude killmails where the victim belongs to one of these corporations. "
+        ),
+    )
     exclude_attacker_states = models.ManyToManyField(
         State,
         related_name="+",
@@ -216,42 +258,13 @@ class Tracker(models.Model):
             "to users with these Auth states. "
         ),
     )
-    require_victim_alliances = models.ManyToManyField(
-        EveAllianceInfo,
+    exclude_victim_states = models.ManyToManyField(
+        State,
         related_name="+",
         default=None,
         blank=True,
         help_text=(
-            "Only include killmails where the victim belongs "
-            "to one of these alliances. "
-        ),
-    )
-    exclude_victim_alliances = models.ManyToManyField(
-        EveAllianceInfo,
-        related_name="+",
-        default=None,
-        blank=True,
-        help_text=(
-            "Exclude killmails where the victim belongs to one of these alliances. "
-        ),
-    )
-    require_victim_corporations = models.ManyToManyField(
-        EveCorporationInfo,
-        related_name="+",
-        default=None,
-        blank=True,
-        help_text=(
-            "Only include killmails where the victim belongs "
-            "to one of these corporations. "
-        ),
-    )
-    exclude_victim_corporations = models.ManyToManyField(
-        EveCorporationInfo,
-        related_name="+",
-        default=None,
-        blank=True,
-        help_text=(
-            "Exclude killmails where the victim belongs to one of these corporations. "
+            "Exclude killmails where the victim belongs to one of these Auth states. "
         ),
     )
     require_victim_states = models.ManyToManyField(
@@ -262,6 +275,41 @@ class Tracker(models.Model):
         help_text=(
             "Only include killmails where the victim characters belong "
             "to users with these Auth states. "
+        ),
+    )
+    exclude_attacker_factions = models.ManyToManyField(
+        EveFactionInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text="Exclude killmails with attackers from one of these factions. ",
+    )
+    require_attacker_factions = models.ManyToManyField(
+        EveFactionInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails with attackers from one of these factions. "
+        ),
+    )
+    require_victim_factions = models.ManyToManyField(
+        EveFactionInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Only include killmails where the victim belongs "
+            "to one of these factions. "
+        ),
+    )
+    exclude_victim_factions = models.ManyToManyField(
+        EveFactionInfo,
+        related_name="+",
+        default=None,
+        blank=True,
+        help_text=(
+            "Exclude killmails where the victim belongs to one of these factions. "
         ),
     )
     identify_fleets = models.BooleanField(
