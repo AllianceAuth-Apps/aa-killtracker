@@ -38,7 +38,7 @@ from killtracker.providers import esi
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
-ZKB_REDISQ_URL = "https://redisq.zkillboard.com/listen.php"
+ZKB_REDISQ_URL = "https://zkillredisq.stream/listen.php"
 ZKB_API_URL = "https://zkillboard.com/api/"
 ZKB_KILLMAIL_BASEURL = "https://zkillboard.com/kill/"
 REQUESTS_TIMEOUT = (5, 30)
