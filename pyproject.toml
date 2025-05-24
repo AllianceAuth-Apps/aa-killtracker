@@ -74,4 +74,5 @@ disable = [
     "import-outside-toplevel",
     "imported-auth-user",
     "too-many-instance-attributes",
+    "too-many-positional-arguments",
 ]

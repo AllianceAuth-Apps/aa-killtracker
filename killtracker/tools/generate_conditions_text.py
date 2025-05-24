@@ -1,5 +1,5 @@
 # flake8: noqa
-""" this generated the list of current tracker conditions for the documentation"""
+"""this generated the list of current tracker conditions for the documentation"""
 
 # init and setup django project
 import inspect
