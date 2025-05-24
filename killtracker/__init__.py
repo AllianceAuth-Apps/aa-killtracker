@@ -1,4 +1,4 @@
-""""An app for running killmail trackers with Alliance Auth and Discord."""
+""" "An app for running killmail trackers with Alliance Auth and Discord."""
 
 # pylint: disable = invalid-name
 default_app_config = "killtracker.apps.KillmailsConfig"
