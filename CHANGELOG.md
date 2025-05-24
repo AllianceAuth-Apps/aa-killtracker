@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [0.16.0] - 2025-05-24
+
+>**IMPORTANT**: When updating from a version prior to 0.13.0, please see the important update notes for 0.13.0 first!
+
+### Changed
+
+- Update ZKB_REDISQ_URL to new endpoint (!22) - Thank you @Dusty-Meg for the contribution!
+- Updated tox tests to confirm with AA4 checks
+
 ## [0.15.0] - 2024-07-04
 
 >**IMPORTANT**: When updating from a version prior to 0.13.0, please see the important update notes for 0.13.0 first!
