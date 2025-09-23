@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [0.17.0] - 2025-09-23
+
+### Update Notes
+
+In case you have adjusted the settings `KILLTRACKER_MAX_KILLMAILS_PER_RUN` please note that the default hast been reduced to `100` in order to stay well below the rate limit. Please adjust your setting to make sure you stay well below the new maximum of 2 requests per second.
+
+### Changed
+
+- Comply with new CloudFlare rate limit of 2 API requests per second (see also [ZKB Readme - Limitations](https://github.com/zKillboard/RedisQ/blob/master/README.md#limitations))
+
 ## [0.16.0] - 2025-05-24
 
 >**IMPORTANT**: When updating from a version prior to 0.13.0, please see the important update notes for 0.13.0 first!
