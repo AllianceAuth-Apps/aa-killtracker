@@ -1,8 +1,11 @@
 """Tasks for killtracker."""
 
+from datetime import timedelta
+
 from celery import chain, shared_task
 
 from django.db import IntegrityError
+from django.utils.timezone import now
 from eveuniverse.core.esitools import is_esi_online
 from eveuniverse.tasks import update_unresolved_eve_entities
 
@@ -22,6 +25,7 @@ from .app_settings import (
     KILLTRACKER_STORING_KILLMAILS_ENABLED,
     KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     KILLTRACKER_TASKS_TIMEOUT,
+    KILLTRACKER_ZKB_REQUEST_DELAY,
 )
 from .core.killmails import Killmail
 from .exceptions import WebhookTooManyRequests
@@ -69,7 +73,10 @@ def run_killtracker(runs: int = 0) -> None:
 
     total_killmails = runs + (1 if killmail else 0)
     if killmail and total_killmails < KILLTRACKER_MAX_KILLMAILS_PER_RUN:
-        run_killtracker.delay(runs=runs + 1)
+        run_killtracker.apply_async(
+            kwargs={"runs": runs + 1},
+            eta=now() + timedelta(milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY),
+        )
     else:
         if (
             KILLTRACKER_STORING_KILLMAILS_ENABLED
