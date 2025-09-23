@@ -87,7 +87,7 @@ Add below lines to your settings file:
 # aa-killtracker
 CELERYBEAT_SCHEDULE['killtracker_run_killtracker'] = {
     'task': 'killtracker.tasks.run_killtracker',
-    'schedule': crontab(minute='*/1'),
+    'schedule': 60,
 }
 KILLTRACKER_QUEUE_ID = ""  # Put your unique queue ID here
 ```

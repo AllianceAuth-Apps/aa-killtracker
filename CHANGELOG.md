@@ -11,11 +11,32 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Update Notes
 
+#### Changed periodic task schedule
+
+Please update the value for `'schedule'` of Killtracker's periodic task in your local settings.
+This change will help reduce peak load on CCP's servers.
+
+The new default configuration looks like this:
+
+```python
+CELERYBEAT_SCHEDULE['killtracker_run_killtracker'] = {
+    'task': 'killtracker.tasks.run_killtracker',
+    'schedule': 60,
+}
+```
+
+Please make sure to restart your AA instance so the changes can take effect.
+
+>**Note**:<br>Killtracker will generate a Django warning until this important configuration change has been completed.
+
+#### New rate limit
+
 In case you have adjusted the settings `KILLTRACKER_MAX_KILLMAILS_PER_RUN` please note that the default hast been reduced to `100` in order to stay well below the rate limit. Please adjust your setting to make sure you stay well below the new maximum of 2 requests per second.
 
 ### Changed
 
 - Comply with new CloudFlare rate limit of 2 API requests per second (see also [ZKB Readme - Limitations](https://github.com/zKillboard/RedisQ/blob/master/README.md#limitations))
+- The previous cron based schedule for periodic tasks has been deprecated and replaces with a basic schedule.
 
 ## [0.16.0] - 2025-05-24
 
