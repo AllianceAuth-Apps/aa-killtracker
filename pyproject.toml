@@ -75,4 +75,5 @@ disable = [
     "imported-auth-user",
     "too-many-instance-attributes",
     "too-many-positional-arguments",
+    "too-many-branches",
 ]

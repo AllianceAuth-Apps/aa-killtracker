@@ -2,36 +2,35 @@
 
 # pylint: disable = redefined-builtin
 
+import datetime as dt
 import json
 from copy import deepcopy
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from http import HTTPStatus
+from time import sleep
 from typing import List, Optional, Set
 from urllib.parse import quote_plus
 
 import requests
 from dacite import DaciteError, from_dict
-from redis.exceptions import LockError
 from simplejson.errors import JSONDecodeError
 
-from django.conf import settings
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.utils.dateparse import parse_datetime
+from django.utils.timezone import now
 from eveuniverse.models import EveType
 
 from allianceauth.services.hooks import get_extension_logger
-from app_utils.allianceauth import get_redis_client
 from app_utils.json import JSONDateTimeDecoder, JSONDateTimeEncoder
 from app_utils.logging import LoggerAddTag
 
 from killtracker import USER_AGENT_TEXT, __title__
 from killtracker.app_settings import (
     KILLTRACKER_QUEUE_ID,
-    KILLTRACKER_REDISQ_LOCK_TIMEOUT,
     KILLTRACKER_REDISQ_TTW,
     KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
+    KILLTRACKER_ZKB_REQUEST_DELAY,
 )
 from killtracker.exceptions import KillmailDoesNotExist
 from killtracker.providers import esi
@@ -47,6 +46,13 @@ MAIN_MINIMUM_COUNT = 2
 MAIN_MINIMUM_SHARE = 0.25
 
 # TODO: Factor out logic for accessing the API to another module
+
+
+class ZKBTooManyRequestsError(Exception):
+    """ZKB RedisQ API has returned 429 Too Many Requests HTTP status code."""
+
+    def __init__(self, retry_at: dt.datetime):
+        self.retry_at = retry_at
 
 
 @dataclass
@@ -160,7 +166,7 @@ class Killmail(_KillmailBase):
     _STORAGE_BASE_KEY = "killtracker_storage_killmail_"
 
     id: int
-    time: datetime
+    time: dt.datetime
     victim: KillmailVictim
     attackers: List[KillmailAttacker]
     position: KillmailPosition
@@ -391,9 +397,14 @@ class Killmail(_KillmailBase):
 
     @classmethod
     def create_from_zkb_redisq(cls) -> Optional["Killmail"]:
-        """Fetches and returns a killmail from ZKB.
+        """Fetches and returns a killmail from ZKB REDISQ API.
 
-        Returns None if no killmail is received.
+        Will automatically wait for a free rate limit slot if needed.
+        Will re-raise TooManyRequests if a recent 429 timeout is not yet expired.
+
+        This method is not thread safe.
+
+        Returns None if no killmail was received.
         """
         if not KILLTRACKER_QUEUE_ID:
             raise ImproperlyConfigured(
@@ -403,34 +414,65 @@ class Killmail(_KillmailBase):
         if "," in KILLTRACKER_QUEUE_ID:
             raise ImproperlyConfigured("A queue ID must not contains commas.")
 
-        redis = get_redis_client()
-        params = {
-            "queueID": quote_plus(KILLTRACKER_QUEUE_ID),
-            "ttw": KILLTRACKER_REDISQ_TTW,
-        }
-        try:
-            logger.info("Trying to fetch killmail from ZKB RedisQ...")
-            with redis.lock(
-                cls.lock_key(), blocking_timeout=KILLTRACKER_REDISQ_LOCK_TIMEOUT
-            ):
-                response = requests.get(
-                    ZKB_REDISQ_URL,
-                    params=params,
-                    timeout=REQUESTS_TIMEOUT,
-                    headers={"User-Agent": USER_AGENT_TEXT},
-                )
-        except LockError:
-            logger.warning(
-                "Failed to acquire lock for atomic access to RedisQ.",
-                exc_info=settings.DEBUG,  # provide details in DEBUG mode
+        key_retry_at = "killtracker-retry-at"
+        if (v := cache.get(key_retry_at)) is not None:
+            try:
+                retry_at = dt.datetime.fromisoformat(v)
+            except (TypeError, ValueError):
+                cache.delete(key_retry_at)
+                logger.warning("unable to parse timestamp of retry at")
+                return None
+
+            if retry_at > now():
+                raise ZKBTooManyRequestsError(retry_at=retry_at)
+
+        key_last_request = "killtracker-last-request"
+        if (v := cache.get(key_last_request)) is not None:
+            try:
+                last_request = dt.datetime.fromisoformat(v)
+            except (TypeError, ValueError):
+                cache.delete(key_last_request)
+                logger.warning("unable to parse timestamp of last request")
+                last_request = now()
+
+            next_slot = last_request + dt.timedelta(
+                milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY
             )
-            return None
+            if seconds := (next_slot - now()).total_seconds() > 0:
+                logger.info("Waiting %f seconds to for next free slot", seconds)
+                sleep(seconds)
+
+        response = requests.get(
+            ZKB_REDISQ_URL,
+            params={
+                "queueID": quote_plus(KILLTRACKER_QUEUE_ID),
+                "ttw": KILLTRACKER_REDISQ_TTW,
+            },
+            timeout=REQUESTS_TIMEOUT,
+            headers={"User-Agent": USER_AGENT_TEXT},
+        )
+        cache.set(key_last_request, dt.datetime.isoformat(now()), timeout=30)
+        logger.debug(
+            "Response from ZKB API: %d %s %s",
+            response.status_code,
+            response.headers,
+            response.text,
+        )
 
         if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
-            logger.error("429 Client Error: Too many requests: %s", response.text)
-            return None
+            try:
+                retry_after = int(response.headers["Retry-After"])
+            except KeyError:
+                retry_after = 10
+            retry_at = now() + dt.timedelta(seconds=retry_after)
+            cache.set(key_retry_at, retry_at.isoformat(), timeout=retry_after + 60)
+            raise ZKBTooManyRequestsError(retry_at=retry_at)
 
-        response.raise_for_status()
+        if response.status_code >= 400:
+            logger.warning(
+                "ZKB API returned error: %d %s", response.status_code, response.text
+            )
+            return None
 
         try:
             data = response.json()
@@ -438,16 +480,16 @@ class Killmail(_KillmailBase):
             logger.error("Error from ZKB API:\n%s", response.text)
             return None
 
-        if data:
-            logger.debug("data:\n%s", data)
+        if not data or "package" not in data or not data["package"]:
+            logger.info("ZKB did not return a killmail")
+            return None
 
-        if data and "package" in data and data["package"]:
-            logger.info("Received a killmail from ZKB RedisQ")
-            package_data = data["package"]
-            return cls._create_from_dict(package_data)
+        package_data = data["package"]
+        km = cls._create_from_dict(package_data)
+        if km is not None:
+            logger.info("ZKB returned killmail %d", km.id)
 
-        logger.debug("Did not received a killmail from ZKB RedisQ")
-        return None
+        return km
 
     @classmethod
     def create_from_zkb_api(cls, killmail_id: int) -> Optional["Killmail"]:
@@ -601,20 +643,3 @@ class Killmail(_KillmailBase):
                     params[prop] = zkb_data[prop]
 
         return KillmailZkb(**params)
-
-    @staticmethod
-    def lock_key() -> str:
-        """Key used for lock operation on Redis."""
-        return f"{__title__.upper()}_REDISQ_LOCK"
-
-    @classmethod
-    def reset_lock_key(cls):
-        """Delete lock key if it exists.
-
-        It can happen that a lock key is not cleaned up
-        and then prevents this class from ever acquiring a lock again.
-        To prevent this we are deleting the lock key at system start.
-        """
-        redis = get_redis_client()
-        if redis.delete(cls.lock_key()) > 0:
-            logger.warning("A stuck lock key was cleared.")

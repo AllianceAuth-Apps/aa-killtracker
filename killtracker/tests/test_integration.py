@@ -3,7 +3,6 @@ from unittest.mock import patch
 import dhooks_lite
 import requests_mock
 
-from django.core.cache import cache
 from django.test import TestCase
 from django.test.utils import override_settings
 
@@ -12,6 +11,7 @@ from killtracker.core.killmails import ZKB_REDISQ_URL
 
 from .testdata.factories import TrackerFactory
 from .testdata.helpers import LoadTestDataMixin, killmails_data
+from .utils import reset_celery_once_locks
 
 PACKAGE_PATH = "killtracker"
 
@@ -26,7 +26,7 @@ class TestTasksEnd2End(LoadTestDataMixin, TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         super().setUpClass()
-        cache.clear()
+        reset_celery_once_locks()
         cls.tracker_1 = TrackerFactory(
             name="My Tracker",
             exclude_null_sec=True,

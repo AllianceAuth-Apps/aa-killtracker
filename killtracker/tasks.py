@@ -1,21 +1,17 @@
 """Tasks for killtracker."""
 
-from datetime import timedelta
-
 from celery import chain, shared_task
 
 from django.db import IntegrityError
-from django.utils.timezone import now
 from eveuniverse.core.esitools import is_esi_online
 from eveuniverse.tasks import update_unresolved_eve_entities
 
 from allianceauth.services.hooks import get_extension_logger
 from allianceauth.services.tasks import QueueOnce
-from app_utils.caching import cached_queryset
 from app_utils.esi import retry_task_if_esi_is_down
 from app_utils.logging import LoggerAddTag
 
-from . import APP_NAME, __title__
+from . import __title__
 from .app_settings import (
     KILLTRACKER_DISCORD_SEND_DELAY,
     KILLTRACKER_GENERATE_MESSAGE_MAX_RETRIES,
@@ -25,44 +21,44 @@ from .app_settings import (
     KILLTRACKER_STORING_KILLMAILS_ENABLED,
     KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     KILLTRACKER_TASKS_TIMEOUT,
-    KILLTRACKER_ZKB_REQUEST_DELAY,
 )
-from .core.killmails import Killmail
+from .core.killmails import Killmail, ZKBTooManyRequestsError
 from .exceptions import WebhookTooManyRequests
 from .models import EveKillmail, Tracker, Webhook
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-@shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
-def run_killtracker(runs: int = 0) -> None:
-    """Main task for running the Killtracker.
+@shared_task(base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)
+def run_killtracker() -> int:
+    """Try to fetch new killmails from ZKB API and start trackers.
 
-    Will fetch new killmails from ZKB and start running trackers for them
+    This is the main periodic task for running Killtracker.
     """
     if not is_esi_online():
         logger.warning("ESI is currently offline. Aborting")
-        return
+        return 0
 
-    if runs == 0:
-        logger.info("Killtracker run started...")
-        qs = cached_queryset(
-            Webhook.objects.filter(is_enabled=True),
-            key=f"{APP_NAME}_enabled_webhooks",
-            timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
-        )
-        for webhook in qs:
-            webhook.reset_failed_messages()
+    for webhook in Webhook.objects.filter(is_enabled=True):
+        webhook.reset_failed_messages()
 
-    killmail = Killmail.create_from_zkb_redisq()
-    if killmail:
+    killmails_count = 0
+    for _ in range(KILLTRACKER_MAX_KILLMAILS_PER_RUN):
+        killmail = None
+        try:
+            killmail = Killmail.create_from_zkb_redisq()
+        except ZKBTooManyRequestsError as ex:
+            logger.warning(
+                "Temporary banned from ZKB API until %s", ex.retry_at.isoformat()
+            )
+            return 0
+
+        if not killmail:
+            break
+
+        killmails_count += 1
         killmail.save()
-        qs = cached_queryset(
-            Tracker.objects.filter(is_enabled=True),
-            key=f"{APP_NAME}_enabled_trackers",
-            timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
-        )
-        for tracker in qs:
+        for tracker in Tracker.objects.filter(is_enabled=True):
             run_tracker.delay(tracker_pk=tracker.pk, killmail_id=killmail.id)
 
         if KILLTRACKER_STORING_KILLMAILS_ENABLED:
@@ -71,23 +67,18 @@ def run_killtracker(runs: int = 0) -> None:
                 update_unresolved_eve_entities.si(),
             ).delay()
 
-    total_killmails = runs + (1 if killmail else 0)
-    if killmail and total_killmails < KILLTRACKER_MAX_KILLMAILS_PER_RUN:
-        run_killtracker.apply_async(
-            kwargs={"runs": runs + 1},
-            eta=now() + timedelta(milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY),
-        )
-    else:
-        if (
-            KILLTRACKER_STORING_KILLMAILS_ENABLED
-            and KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS > 0
-        ):
-            delete_stale_killmails.delay()
+    logger.info(
+        "Killtracker received %d killmails from ZKB",
+        killmails_count,
+    )
 
-        logger.info(
-            "Killtracker runs completed. %d killmails received from ZKB",
-            total_killmails,
-        )
+    if (
+        KILLTRACKER_STORING_KILLMAILS_ENABLED
+        and KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS > 0
+    ):
+        delete_stale_killmails.delay()
+
+    return killmails_count
 
 
 @shared_task(bind=True, max_retries=None)
@@ -228,4 +219,5 @@ def send_test_message_to_webhook(webhook_pk: int, count: int = 1) -> None:
     for num in range(count):
         num_str = f"{num+1}/{count} " if count > 1 else ""
         webhook.enqueue_message(content=f"Test message {num_str}from {__title__}.")
+
     send_messages_to_webhook.delay(webhook.pk)

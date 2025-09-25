@@ -10,6 +10,3 @@ class KillmailsConfig(AppConfig):
 
     def ready(self) -> None:
         from . import checks  # noqa: F401 pylint: disable=unused-import
-        from .core.killmails import Killmail
-
-        Killmail.reset_lock_key()
