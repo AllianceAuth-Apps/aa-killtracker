@@ -52,6 +52,7 @@ class TestTrackerBase(LoadTestDataMixin, TestCase):
         )
 
 
+@patch(MODULE_PATH + ".worker_shutdown.is_shutting_down", spec=True)
 @patch(MODULE_PATH + ".is_esi_online", spec=True)
 @patch(MODULE_PATH + ".delete_stale_killmails", spec=True)
 @patch(MODULE_PATH + ".store_killmail", spec=True)
@@ -77,8 +78,10 @@ class TestRunKilltracker(TestTrackerBase):
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_esi_online,
+        mock_is_shutting_down,
     ):
         # given
+        mock_is_shutting_down.return_value = False
         mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
         mock_is_esi_online.return_value = True
         self.webhook_1.error_queue.enqueue(load_killmail(10000004).asjson())
@@ -100,8 +103,10 @@ class TestRunKilltracker(TestTrackerBase):
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_esi_online,
+        mock_is_shutting_down,
     ):
         # given
+        mock_is_shutting_down.return_value = False
         mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
         mock_is_esi_online.return_value = False
         # when
@@ -120,8 +125,10 @@ class TestRunKilltracker(TestTrackerBase):
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_esi_online,
+        mock_is_shutting_down,
     ):
         # given
+        mock_is_shutting_down.return_value = False
         mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
         mock_is_esi_online.return_value = True
         # when
@@ -139,8 +146,10 @@ class TestRunKilltracker(TestTrackerBase):
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_esi_online,
+        mock_is_shutting_down,
     ):
         # given
+        mock_is_shutting_down.return_value = False
         mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
         mock_is_esi_online.return_value = True
         # when
@@ -158,8 +167,10 @@ class TestRunKilltracker(TestTrackerBase):
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_esi_online,
+        mock_is_shutting_down,
     ):
         # given
+        mock_is_shutting_down.return_value = False
         mock_create_from_zkb_redisq.side_effect = ZKBTooManyRequestsError(
             now() + dt.timedelta(minutes=1)
         )
@@ -169,6 +180,28 @@ class TestRunKilltracker(TestTrackerBase):
         # then
         self.assertEqual(got, 0)
         self.assertEqual(mock_run_tracker.delay.call_count, 0)
+
+    @patch(MODULE_PATH + ".KILLTRACKER_STORING_KILLMAILS_ENABLED", False)
+    def test_should_abort_when_worker_is_offline(
+        self,
+        mock_run_tracker,
+        mock_create_from_zkb_redisq,
+        mock_store_killmail,
+        mock_delete_stale_killmails,
+        mock_is_esi_online,
+        mock_is_shutting_down,
+    ):
+        # given
+        mock_is_shutting_down.return_value = True
+        mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
+        mock_is_esi_online.return_value = True
+        # when
+        got = run_killtracker()
+        # then
+        self.assertEqual(got, 0)
+        self.assertEqual(mock_run_tracker.delay.call_count, 0)
+        self.assertEqual(mock_store_killmail.si.call_count, 0)
+        self.assertFalse(mock_delete_stale_killmails.delay.called)
 
 
 @patch(MODULE_PATH + ".retry_task_if_esi_is_down", lambda x: None)

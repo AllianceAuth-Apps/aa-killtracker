@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.forms.widgets import TextInput
 from django.utils.translation import gettext_lazy as _
 
-from .models import Tracker
+from killtracker.models import Tracker
 
 
 def field_nice_display(name: str) -> str:

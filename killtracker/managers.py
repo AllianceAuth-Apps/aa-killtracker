@@ -13,9 +13,9 @@ from allianceauth.services.hooks import get_extension_logger
 from app_utils.caching import ObjectCacheMixin
 from app_utils.logging import LoggerAddTag
 
-from . import __title__
-from .app_settings import KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS
-from .core.killmails import Killmail, _KillmailCharacter
+from killtracker import __title__
+from killtracker.app_settings import KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS
+from killtracker.core.killmails import Killmail, _KillmailCharacter
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 

@@ -1,5 +1,7 @@
 """Tasks for killtracker."""
 
+import time
+
 from celery import chain, shared_task
 
 from django.db import IntegrityError
@@ -11,26 +13,28 @@ from allianceauth.services.tasks import QueueOnce
 from app_utils.esi import retry_task_if_esi_is_down
 from app_utils.logging import LoggerAddTag
 
-from . import __title__
-from .app_settings import (
+from killtracker import __title__
+from killtracker.app_settings import (
     KILLTRACKER_DISCORD_SEND_DELAY,
     KILLTRACKER_GENERATE_MESSAGE_MAX_RETRIES,
     KILLTRACKER_GENERATE_MESSAGE_RETRY_COUNTDOWN,
     KILLTRACKER_MAX_KILLMAILS_PER_RUN,
     KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS,
+    KILLTRACKER_RUN_TIMEOUT,
     KILLTRACKER_STORING_KILLMAILS_ENABLED,
     KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     KILLTRACKER_TASKS_TIMEOUT,
 )
-from .core.killmails import Killmail, ZKBTooManyRequestsError
-from .exceptions import WebhookTooManyRequests
-from .models import EveKillmail, Tracker, Webhook
+from killtracker.core import worker_shutdown
+from killtracker.core.killmails import Killmail, ZKBTooManyRequestsError
+from killtracker.exceptions import WebhookTooManyRequests
+from killtracker.models import EveKillmail, Tracker, Webhook
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-@shared_task(base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)
-def run_killtracker() -> int:
+@shared_task(bind=True, base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)
+def run_killtracker(self) -> int:
     """Try to fetch new killmails from ZKB API and start trackers.
 
     This is the main periodic task for running Killtracker.
@@ -43,7 +47,16 @@ def run_killtracker() -> int:
         webhook.reset_failed_messages()
 
     killmails_count = 0
+    started = time.time()
     for _ in range(KILLTRACKER_MAX_KILLMAILS_PER_RUN):
+        elapsed = time.time() - started
+        if elapsed > KILLTRACKER_RUN_TIMEOUT:
+            break
+
+        if worker_shutdown.is_shutting_down(self):
+            logger.debug("Aborting due to worker shutdown")
+            break
+
         killmail = None
         try:
             killmail = Killmail.create_from_zkb_redisq()

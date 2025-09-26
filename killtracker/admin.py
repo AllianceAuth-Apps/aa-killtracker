@@ -10,10 +10,14 @@ from django.utils.safestring import mark_safe
 
 from allianceauth import NAME as site_header
 
-from . import tasks
-from .core.killmails import Killmail
-from .forms import TrackerAdminForm, TrackerAdminKillmailIdForm, field_nice_display
-from .models import EveKillmail, EveKillmailAttacker, Tracker, Webhook
+from killtracker import tasks
+from killtracker.core.killmails import Killmail
+from killtracker.forms import (
+    TrackerAdminForm,
+    TrackerAdminKillmailIdForm,
+    field_nice_display,
+)
+from killtracker.models import EveKillmail, EveKillmailAttacker, Tracker, Webhook
 
 
 class EveKillmailAttackerInline(admin.TabularInline):
