@@ -1,5 +1,7 @@
 """Module signals connects to celery signals."""
 
+# pylint: disable=missing-function-docstring
+
 from celery import signals
 
 from allianceauth.services.hooks import get_extension_logger

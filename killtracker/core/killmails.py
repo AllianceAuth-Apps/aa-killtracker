@@ -41,6 +41,7 @@ ZKB_REDISQ_URL = "https://zkillredisq.stream/listen.php"
 ZKB_API_URL = "https://zkillboard.com/api/"
 ZKB_KILLMAIL_BASEURL = "https://zkillboard.com/kill/"
 REQUESTS_TIMEOUT = (5, 30)
+DEFAULT_429_TIMEOUT = 10
 
 MAIN_MINIMUM_COUNT = 2
 MAIN_MINIMUM_SHARE = 0.25
@@ -51,8 +52,9 @@ MAIN_MINIMUM_SHARE = 0.25
 class ZKBTooManyRequestsError(Exception):
     """ZKB RedisQ API has returned 429 Too Many Requests HTTP status code."""
 
-    def __init__(self, retry_at: dt.datetime):
+    def __init__(self, retry_at: dt.datetime, is_original: bool = True):
         self.retry_at = retry_at
+        self.is_original = is_original
 
 
 @dataclass
@@ -424,7 +426,7 @@ class Killmail(_KillmailBase):
                 return None
 
             if retry_at > now():
-                raise ZKBTooManyRequestsError(retry_at=retry_at)
+                raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=False)
 
         key_last_request = "killtracker-last-request"
         if (v := cache.get(key_last_request)) is not None:
@@ -438,8 +440,9 @@ class Killmail(_KillmailBase):
             next_slot = last_request + dt.timedelta(
                 milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY
             )
-            if seconds := (next_slot - now()).total_seconds() > 0:
-                logger.info("Waiting %f seconds to for next free slot", seconds)
+            seconds = (next_slot - now()).total_seconds()
+            if seconds > 0:
+                logger.debug("Waiting %f seconds to for next free slot", seconds)
                 sleep(seconds)
 
         response = requests.get(
@@ -459,25 +462,25 @@ class Killmail(_KillmailBase):
             response.text,
         )
 
-        if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
-            try:
-                retry_after = int(response.headers["Retry-After"])
-            except KeyError:
-                retry_after = 10
-            retry_at = now() + dt.timedelta(seconds=retry_after)
-            cache.set(key_retry_at, retry_at.isoformat(), timeout=retry_after + 60)
-            raise ZKBTooManyRequestsError(retry_at=retry_at)
-
-        if response.status_code >= 400:
+        if not response.ok:
             logger.warning(
                 "ZKB API returned error: %d %s", response.status_code, response.text
             )
+            if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
+                try:
+                    retry_after = int(response.headers["Retry-After"])
+                except KeyError:
+                    retry_after = DEFAULT_429_TIMEOUT
+                retry_at = now() + dt.timedelta(seconds=retry_after)
+                cache.set(key_retry_at, retry_at.isoformat(), timeout=retry_after + 60)
+                raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=True)
+
             return None
 
         try:
             data = response.json()
         except JSONDecodeError:
-            logger.error("Error from ZKB API:\n%s", response.text)
+            logger.error("Error parsing ZKB API response:\n%s", response.text)
             return None
 
         if not data or "package" not in data or not data["package"]:
@@ -488,6 +491,8 @@ class Killmail(_KillmailBase):
         km = cls._create_from_dict(package_data)
         if km is not None:
             logger.info("ZKB returned killmail %d", km.id)
+        else:
+            logger.info("Failed to parse killmail from ZKB")
 
         return km
 

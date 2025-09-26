@@ -160,7 +160,7 @@ class TestRunKilltracker(TestTrackerBase):
         self.assertTrue(mock_delete_stale_killmails.delay.called)
 
     @patch(MODULE_PATH + ".KILLTRACKER_MAX_KILLMAILS_PER_RUN", 2)
-    def test_should_abort_when_too_many_errors_received(
+    def test_should_retry_when_too_many_errors_received(
         self,
         mock_run_tracker,
         mock_create_from_zkb_redisq,
@@ -175,10 +175,10 @@ class TestRunKilltracker(TestTrackerBase):
             now() + dt.timedelta(minutes=1)
         )
         mock_is_esi_online.return_value = True
-        # when
-        got = run_killtracker()
+        # when/then
+        with self.assertRaises(celery.exceptions.Retry):
+            run_killtracker()
         # then
-        self.assertEqual(got, 0)
         self.assertEqual(mock_run_tracker.delay.call_count, 0)
 
     @patch(MODULE_PATH + ".KILLTRACKER_STORING_KILLMAILS_ENABLED", False)
