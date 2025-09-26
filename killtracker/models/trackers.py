@@ -881,12 +881,14 @@ class Tracker(models.Model):
     def generate_killmail_message(
         self, killmail: Killmail, intro_text: Optional[str] = None
     ) -> int:
-        """generate a message from given killmail and enqueue for later sending
+        """Generate a message from given killmail and enqueue for later sending.
 
-        returns new queue size
+        Returns the new queue size.
         """
         from killtracker.core import discord_messages
 
         content = discord_messages.create_content(self, intro_text)
         embed = discord_messages.create_embed(self, killmail)
-        return self.webhook.enqueue_message(content=content, embeds=[embed])
+        return self.webhook.enqueue_message(
+            killmail_id=killmail.id, content=content, embeds=[embed]
+        )

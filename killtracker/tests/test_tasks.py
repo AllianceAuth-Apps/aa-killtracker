@@ -311,8 +311,9 @@ class TestSendMessagesToWebhook(TestTrackerBase):
     def test_one_message(self, mock_send_message_to_webhook):
         """when one message in queue, then send it and retry with delay"""
         # given
-        mock_send_message_to_webhook.return_value = dhooks_lite.WebhookResponse(
-            {}, status_code=200
+        mock_send_message_to_webhook.return_value = (
+            dhooks_lite.WebhookResponse({}, status_code=200),
+            0,
         )
         self.webhook_1.enqueue_message(content="Test message")
         # when
@@ -325,8 +326,9 @@ class TestSendMessagesToWebhook(TestTrackerBase):
     def test_three_message(self, mock_send_message_to_webhook):
         """when three messages in queue, then sends them and returns 3"""
         # given
-        mock_send_message_to_webhook.return_value = dhooks_lite.WebhookResponse(
-            {}, status_code=200
+        mock_send_message_to_webhook.return_value = (
+            dhooks_lite.WebhookResponse({}, status_code=200),
+            0,
         )
         self.webhook_1.enqueue_message(content="Test message")
         self.webhook_1.enqueue_message(content="Test message")
@@ -341,8 +343,9 @@ class TestSendMessagesToWebhook(TestTrackerBase):
     def test_no_messages(self, mock_send_message_to_webhook):
         """when no messages in queue, then do nothing"""
         # given
-        mock_send_message_to_webhook.return_value = dhooks_lite.WebhookResponse(
-            {}, status_code=200
+        mock_send_message_to_webhook.return_value = (
+            dhooks_lite.WebhookResponse({}, status_code=200),
+            0,
         )
         # when
         send_messages_to_webhook.delay(self.webhook_1.pk)
@@ -354,8 +357,9 @@ class TestSendMessagesToWebhook(TestTrackerBase):
     def test_failed_message(self, mock_send_message_to_webhook):
         """when message sending failed, then put message in error queue"""
         # given
-        mock_send_message_to_webhook.return_value = dhooks_lite.WebhookResponse(
-            {}, status_code=404
+        mock_send_message_to_webhook.return_value = (
+            dhooks_lite.WebhookResponse({}, status_code=404),
+            0,
         )
         self.webhook_1.enqueue_message(content="Test message")
         # when

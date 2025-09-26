@@ -1,7 +1,7 @@
 """Webhooks models for killtracker."""
 
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import dhooks_lite
 from simple_mq import SimpleMQ
@@ -123,6 +123,7 @@ class Webhook(models.Model):
 
     def enqueue_message(
         self,
+        killmail_id: int = 0,
         content: Optional[str] = None,
         embeds: Optional[List[dhooks_lite.Embed]] = None,
         tts: Optional[bool] = None,
@@ -138,6 +139,7 @@ class Webhook(models.Model):
         avatar_url = brand_url if KILLTRACKER_WEBHOOK_SET_AVATAR else avatar_url
         return self.main_queue.enqueue(
             self._discord_message_asjson(
+                killmail_id=killmail_id,
                 content=content,
                 embeds=embeds,
                 tts=tts,
@@ -148,6 +150,7 @@ class Webhook(models.Model):
 
     @staticmethod
     def _discord_message_asjson(
+        killmail_id: int = 0,
         content: Optional[str] = None,
         embeds: Optional[List[dhooks_lite.Embed]] = None,
         tts: Optional[bool] = None,
@@ -167,6 +170,8 @@ class Webhook(models.Model):
             embeds_list = None
 
         message = {}
+        if killmail_id:
+            message["killmail_id"] = killmail_id
         if content:
             message["content"] = content
         if embeds_list:
@@ -180,7 +185,9 @@ class Webhook(models.Model):
 
         return json.dumps(message, cls=JSONDateTimeEncoder)
 
-    def send_message_to_webhook(self, message_json: str) -> dhooks_lite.WebhookResponse:
+    def send_message_to_webhook(
+        self, message_json: str
+    ) -> Tuple[dhooks_lite.WebhookResponse, int]:
         """Send given message to webhook
 
         Params
@@ -190,7 +197,8 @@ class Webhook(models.Model):
         if timeout:
             raise WebhookTooManyRequests(timeout)
 
-        message = json.loads(message_json, cls=JSONDateTimeDecoder)
+        message: dict = json.loads(message_json, cls=JSONDateTimeDecoder)
+        killmail_id = message.get("killmail_id", 0)
         if message.get("embeds"):
             embeds = [
                 dhooks_lite.Embed.from_dict(embed_dict)
@@ -198,6 +206,7 @@ class Webhook(models.Model):
             ]
         else:
             embeds = None
+
         hook = dhooks_lite.Webhook(
             url=self.url,
             user_agent=dhooks_lite.UserAgent(
@@ -212,9 +221,13 @@ class Webhook(models.Model):
             wait_for_response=True,
             max_retries=0,  # we will handle retries ourselves
         )
-        logger.debug("headers: %s", response.headers)
-        logger.debug("status_code: %s", response.status_code)
-        logger.debug("content: %s", response.content)
+        logger.debug(
+            "%s: Response from Discord for creating message from killmail %d: %s %s %s",
+            self,
+            response.status_code,
+            response.headers,
+            response.content,
+        )
         if response.status_code == self.HTTP_TOO_MANY_REQUESTS:
             logger.error(
                 "%s: Received too many requests error from API: %s",
@@ -229,7 +242,8 @@ class Webhook(models.Model):
                 key=self._blocked_cache_key(), value="BLOCKED", timeout=retry_after
             )
             raise WebhookTooManyRequests(retry_after)
-        return response
+
+        return response, killmail_id
 
     def _blocked_cache_key(self) -> str:
         return f"{__title__}_webhook_{self.pk}_blocked"

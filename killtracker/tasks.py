@@ -2,7 +2,8 @@
 
 import time
 
-from celery import chain, shared_task
+import dhooks_lite
+from celery import Task, chain, shared_task
 
 from django.db import IntegrityError
 from django.utils.timezone import now
@@ -35,7 +36,7 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
 @shared_task(bind=True, base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)
-def run_killtracker(self) -> int:
+def run_killtracker(self: Task) -> int:
     """Try to fetch new killmails from ZKB API and start trackers.
 
     This is the main periodic task for running Killtracker.
@@ -121,7 +122,7 @@ def run_tracker(
         killmail=killmail, ignore_max_age=ignore_max_age
     )
     if killmail_new:
-        logger.info("%s: Killmail %d matches", killmail_id, tracker)
+        logger.info("%s: Killmail %d matches", tracker, killmail_id)
         killmail_new.save()
         generate_killmail_message.delay(tracker_pk=tracker_pk, killmail_id=killmail_id)
     elif tracker.webhook.main_queue.size():
@@ -156,7 +157,9 @@ def generate_killmail_message(self, tracker_pk: int, killmail_id: int) -> None:
         )
 
     send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
-    logger.info("%s: Generated message from killmail %s", tracker, killmail.id)
+    logger.info(
+        "%s: Added message from killmail %s to send queue", tracker, killmail.id
+    )
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
@@ -188,10 +191,10 @@ def delete_stale_killmails() -> None:
     retry_backoff=False,
     max_retries=None,
 )
-def send_messages_to_webhook(self, webhook_pk: int) -> None:
+def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
     """Sends all queued messages to given Webhook."""
 
-    webhook = Webhook.objects.get_cached(
+    webhook: Webhook = Webhook.objects.get_cached(
         pk=webhook_pk,
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
@@ -200,32 +203,46 @@ def send_messages_to_webhook(self, webhook_pk: int) -> None:
         return
 
     message_json = webhook.main_queue.dequeue()
-    if message_json:
+    if not message_json:
+        logger.debug("%s: No more messages to send for webhook", webhook)
+        return
+
+    response: dhooks_lite.WebhookResponse
+    killmail_id: int
+    try:
+        response, killmail_id = webhook.send_message_to_webhook(message_json)
+    except WebhookTooManyRequests as ex:
+        webhook.main_queue.enqueue(message_json)
+        logger.warning(
+            "%s: Too many requests for webhook. Blocked for %s seconds. Aborting.",
+            webhook,
+            ex.retry_after,
+        )
+        return
+
+    if not response.status_ok:
+        webhook.error_queue.enqueue(message_json)
+        logger.warning(
+            "%s: Failed to send message for Killmail %d to webhook, will retry. "
+            "HTTP status code: %d, response: %s",
+            webhook,
+            killmail_id,
+            response.status_code,
+            response.content,
+        )
+    else:
         try:
-            response = webhook.send_message_to_webhook(message_json)
-        except WebhookTooManyRequests as ex:
-            webhook.main_queue.enqueue(message_json)
-            logger.warning(
-                "%s: Too many requests for webhook. Blocked for %s seconds. Aborting.",
-                webhook,
-                ex.retry_after,
-            )
-            return
+            message_id = response.content.get("id")
+        except AttributeError:
+            message_id = "?"
+        logger.info(
+            "%s: Discord message %s created for killmail %d",
+            webhook,
+            message_id,
+            killmail_id,
+        )
 
-        if not response.status_ok:
-            webhook.error_queue.enqueue(message_json)
-            logger.warning(
-                "%s: Failed to send message to webhook, will retry. "
-                "HTTP status code: %d, response: %s",
-                webhook,
-                response.status_code,
-                response.content,
-            )
-
-        logger.info("%s: Message sent to webhook", webhook)
-        raise self.retry(countdown=KILLTRACKER_DISCORD_SEND_DELAY)
-
-    logger.debug("%s: No more messages to send for webhook", webhook)
+    raise self.retry(countdown=KILLTRACKER_DISCORD_SEND_DELAY)
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)

@@ -85,7 +85,7 @@ class TestWebhookSendMessage(LoadTestDataMixin, TestCase):
             },
         )
         # when
-        response = self.webhook_1.send_message_to_webhook(self.message)
+        response, _ = self.webhook_1.send_message_to_webhook(self.message)
         # then
         self.assertTrue(response.status_ok)
         self.assertTrue(requests_mocker.called)
@@ -94,7 +94,7 @@ class TestWebhookSendMessage(LoadTestDataMixin, TestCase):
         # given
         requests_mocker.register_uri("POST", self.webhook_1.url, status_code=404)
         # when
-        response = self.webhook_1.send_message_to_webhook(self.message)
+        response, _ = self.webhook_1.send_message_to_webhook(self.message)
         # then
         self.assertFalse(response.status_ok)
         self.assertTrue(requests_mocker.called)
