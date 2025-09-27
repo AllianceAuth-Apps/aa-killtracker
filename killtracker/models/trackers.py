@@ -887,8 +887,9 @@ class Tracker(models.Model):
         """
         from killtracker.core import discord_messages
 
-        content = discord_messages.create_content(self, intro_text)
-        embed = discord_messages.create_embed(self, killmail)
-        return self.webhook.enqueue_message(
-            killmail_id=killmail.id, content=content, embeds=[embed]
+        message = discord_messages.DiscordMessage(
+            killmail_id=killmail.id,
+            content=discord_messages.create_content(self, intro_text),
+            embeds=[discord_messages.create_embed(self, killmail)],
         )
+        return self.webhook.enqueue_message(message)

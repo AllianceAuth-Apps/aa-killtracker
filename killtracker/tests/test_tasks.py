@@ -9,6 +9,7 @@ from django.test import TestCase
 from django.test.utils import override_settings
 from django.utils.timezone import now
 
+from killtracker.core.discord_messages import DiscordMessage
 from killtracker.exceptions import WebhookTooManyRequests
 from killtracker.models import EveKillmail
 from killtracker.tasks import (
@@ -248,7 +249,7 @@ class TestRunTracker(TestTrackerBase):
         # given
         killmail = load_killmail(10000003)
         killmail.save()
-        self.webhook_1.enqueue_message(content="test")
+        self.webhook_1.enqueue_message(DiscordMessage(content="test"))
         # when
         run_tracker(self.tracker_1.pk, killmail.id)
         # then
@@ -303,84 +304,80 @@ class TestGenerateKillmailMessage(TestTrackerBase):
 
 @patch("celery.app.task.Context.called_directly", False)  # make retry work with eager
 @override_settings(CELERY_ALWAYS_EAGER=True)
-@patch(MODULE_PATH + ".Webhook.send_message_to_webhook", spec=True)
+@patch(MODULE_PATH + ".Webhook.send_message", spec=True)
 class TestSendMessagesToWebhook(TestTrackerBase):
     def setUp(self) -> None:
         cache.clear()
 
-    def test_one_message(self, mock_send_message_to_webhook):
+    def test_one_message(self, mock_send_message):
         """when one message in queue, then send it and retry with delay"""
         # given
-        mock_send_message_to_webhook.return_value = (
-            dhooks_lite.WebhookResponse({}, status_code=200),
-            0,
+        mock_send_message.return_value = dhooks_lite.WebhookResponse(
+            {}, status_code=200
         )
-        self.webhook_1.enqueue_message(content="Test message")
+        self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
-        self.assertEqual(mock_send_message_to_webhook.call_count, 1)
+        self.assertEqual(mock_send_message.call_count, 1)
         self.assertEqual(self.webhook_1.main_queue.size(), 0)
         self.assertEqual(self.webhook_1.error_queue.size(), 0)
 
-    def test_three_message(self, mock_send_message_to_webhook):
+    def test_three_message(self, mock_send_message):
         """when three messages in queue, then sends them and returns 3"""
         # given
-        mock_send_message_to_webhook.return_value = (
-            dhooks_lite.WebhookResponse({}, status_code=200),
-            0,
+        mock_send_message.return_value = dhooks_lite.WebhookResponse(
+            {}, status_code=200
         )
-        self.webhook_1.enqueue_message(content="Test message")
-        self.webhook_1.enqueue_message(content="Test message")
-        self.webhook_1.enqueue_message(content="Test message")
+        self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
+        self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
+        self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
-        self.assertEqual(mock_send_message_to_webhook.call_count, 3)
+        self.assertEqual(mock_send_message.call_count, 3)
         self.assertEqual(self.webhook_1.main_queue.size(), 0)
         self.assertEqual(self.webhook_1.error_queue.size(), 0)
 
-    def test_no_messages(self, mock_send_message_to_webhook):
+    def test_no_messages(self, mock_send_message):
         """when no messages in queue, then do nothing"""
         # given
-        mock_send_message_to_webhook.return_value = (
-            dhooks_lite.WebhookResponse({}, status_code=200),
-            0,
+        mock_send_message.return_value = dhooks_lite.WebhookResponse(
+            {}, status_code=200
         )
         # when
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
-        self.assertEqual(mock_send_message_to_webhook.call_count, 0)
+        self.assertEqual(mock_send_message.call_count, 0)
         self.assertEqual(self.webhook_1.main_queue.size(), 0)
         self.assertEqual(self.webhook_1.error_queue.size(), 0)
 
-    def test_failed_message(self, mock_send_message_to_webhook):
+    def test_failed_message(self, mock_send_message):
         """when message sending failed, then put message in error queue"""
         # given
-        mock_send_message_to_webhook.return_value = (
-            dhooks_lite.WebhookResponse({}, status_code=404),
-            0,
+        mock_send_message.return_value = dhooks_lite.WebhookResponse(
+            {}, status_code=404
         )
-        self.webhook_1.enqueue_message(content="Test message")
+        self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
-        self.assertEqual(mock_send_message_to_webhook.call_count, 1)
+        self.assertEqual(mock_send_message.call_count, 1)
         self.assertEqual(self.webhook_1.main_queue.size(), 0)
         self.assertEqual(self.webhook_1.error_queue.size(), 1)
 
-    def test_abort_on_too_many_requests(self, mock_send_message_to_webhook):
+    def test_abort_on_too_many_requests(self, mock_send_message):
         """
         when WebhookTooManyRequests exception is raised
         then message is re-queued and retry once
         """
         # given
-        mock_send_message_to_webhook.side_effect = WebhookTooManyRequests(10)
-        self.webhook_1.enqueue_message(content="Test message")
+        mock_send_message.side_effect = WebhookTooManyRequests(10)
+        self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
-        self.assertEqual(mock_send_message_to_webhook.call_count, 1)
+        self.assertEqual(mock_send_message.call_count, 1)
         self.assertEqual(self.webhook_1.main_queue.size(), 1)
 
 

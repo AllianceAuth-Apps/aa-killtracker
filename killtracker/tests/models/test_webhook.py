@@ -1,15 +1,10 @@
-import json
-
-import dhooks_lite
 import requests_mock
 
 from django.core.cache import cache
 from django.test import TestCase
 
-from app_utils.json import JSONDateTimeDecoder
-
+from killtracker.core.discord_messages import DiscordMessage
 from killtracker.exceptions import WebhookTooManyRequests
-from killtracker.models import Webhook
 from killtracker.tests.testdata.helpers import LoadTestDataMixin
 
 
@@ -32,32 +27,11 @@ class TestWebhookQueue(LoadTestDataMixin, TestCase):
         self.assertEqual(self.webhook_1.error_queue.size(), 0)
         self.assertEqual(self.webhook_1.main_queue.size(), 2)
 
-    def test_discord_message_asjson_normal(self):
-        embed = dhooks_lite.Embed(description="my_description")
-        result = Webhook._discord_message_asjson(
-            content="my_content",
-            username="my_username",
-            avatar_url="my_avatar_url",
-            embeds=[embed],
-        )
-        message_python = json.loads(result, cls=JSONDateTimeDecoder)
-        expected = {
-            "content": "my_content",
-            "embeds": [{"description": "my_description", "type": "rich"}],
-            "username": "my_username",
-            "avatar_url": "my_avatar_url",
-        }
-        self.assertDictEqual(message_python, expected)
-
-    def test_discord_message_asjson_empty(self):
-        with self.assertRaises(ValueError):
-            Webhook._discord_message_asjson("")
-
 
 @requests_mock.Mocker()
 class TestWebhookSendMessage(LoadTestDataMixin, TestCase):
     def setUp(self) -> None:
-        self.message = Webhook._discord_message_asjson(content="Test message")
+        self.message = DiscordMessage(content="Test message")
         cache.clear()
 
     def test_when_send_ok_returns_true(self, requests_mocker):
@@ -85,7 +59,7 @@ class TestWebhookSendMessage(LoadTestDataMixin, TestCase):
             },
         )
         # when
-        response, _ = self.webhook_1.send_message_to_webhook(self.message)
+        response = self.webhook_1.send_message(self.message)
         # then
         self.assertTrue(response.status_ok)
         self.assertTrue(requests_mocker.called)
@@ -94,7 +68,7 @@ class TestWebhookSendMessage(LoadTestDataMixin, TestCase):
         # given
         requests_mocker.register_uri("POST", self.webhook_1.url, status_code=404)
         # when
-        response, _ = self.webhook_1.send_message_to_webhook(self.message)
+        response = self.webhook_1.send_message(self.message)
         # then
         self.assertFalse(response.status_ok)
         self.assertTrue(requests_mocker.called)
@@ -118,7 +92,7 @@ class TestWebhookSendMessage(LoadTestDataMixin, TestCase):
         )
         # when/then
         try:
-            self.webhook_1.send_message_to_webhook(self.message)
+            self.webhook_1.send_message(self.message)
         except Exception as ex:
             self.assertIsInstance(ex, WebhookTooManyRequests)
             self.assertEqual(ex.retry_after, 2002)
@@ -142,7 +116,7 @@ class TestWebhookSendMessage(LoadTestDataMixin, TestCase):
         )
         # when/then
         try:
-            self.webhook_1.send_message_to_webhook(self.message)
+            self.webhook_1.send_message(self.message)
         except Exception as ex:
             self.assertIsInstance(ex, WebhookTooManyRequests)
             self.assertEqual(ex.retry_after, WebhookTooManyRequests.DEFAULT_RESET_AFTER)

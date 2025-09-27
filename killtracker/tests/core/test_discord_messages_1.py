@@ -88,3 +88,33 @@ class TestCreateEmbed(NoSocketsTestCase):
         embed = discord_messages.create_embed(tracker, killmail)
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
+
+
+class TestDiscordMessage(NoSocketsTestCase):
+    def test_can_create(self):
+        o = discord_messages.DiscordMessage(content="content")
+        self.assertEqual(o.content, "content")
+
+    def test_should_raise_exception_when_invalid(self):
+        with self.assertRaises(ValueError):
+            discord_messages.DiscordMessage(username="user")
+
+    def test_can_convert_to_and_from_json_1(self):
+        o1 = discord_messages.DiscordMessage(
+            content="content",
+        )
+        s = o1.to_json()
+        o2 = discord_messages.DiscordMessage.from_json(s)
+        self.assertEqual(o1, o2)
+
+    def test_can_convert_to_and_from_json_2(self):
+        o1 = discord_messages.DiscordMessage(
+            avatar_url="avatar_url",
+            content="content",
+            embeds=[dhooks_lite.Embed(description="description")],
+            killmail_id=42,
+            username="username",
+        )
+        s = o1.to_json()
+        o2 = discord_messages.DiscordMessage.from_json(s)
+        self.assertEqual(o1, o2)

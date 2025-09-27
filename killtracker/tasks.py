@@ -28,6 +28,7 @@ from killtracker.app_settings import (
     KILLTRACKER_TASKS_TIMEOUT,
 )
 from killtracker.core import worker_shutdown
+from killtracker.core.discord_messages import DiscordMessage
 from killtracker.core.killmails import Killmail, ZKBTooManyRequestsError
 from killtracker.exceptions import WebhookTooManyRequests
 from killtracker.models import EveKillmail, Tracker, Webhook
@@ -207,10 +208,10 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
         logger.debug("%s: No more messages to send for webhook", webhook)
         return
 
-    response: dhooks_lite.WebhookResponse
-    killmail_id: int
+    message = DiscordMessage.from_json(message_json)
+
     try:
-        response, killmail_id = webhook.send_message_to_webhook(message_json)
+        response: dhooks_lite.WebhookResponse = webhook.send_message(message)
     except WebhookTooManyRequests as ex:
         webhook.main_queue.enqueue(message_json)
         logger.warning(
@@ -226,7 +227,7 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
             "%s: Failed to send message for Killmail %d to webhook, will retry. "
             "HTTP status code: %d, response: %s",
             webhook,
-            killmail_id,
+            message.killmail_id,
             response.status_code,
             response.content,
         )
@@ -239,7 +240,7 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
             "%s: Discord message %s created for killmail %d",
             webhook,
             message_id,
-            killmail_id,
+            message.killmail_id,
         )
 
     raise self.retry(countdown=KILLTRACKER_DISCORD_SEND_DELAY)
@@ -259,7 +260,8 @@ def send_test_message_to_webhook(webhook_pk: int, count: int = 1) -> None:
 
     for num in range(count):
         num_str = f"{num+1}/{count} " if count > 1 else ""
-        webhook.enqueue_message(content=f"Test message {num_str}from {__title__}.")
+        message = DiscordMessage(content=f"Test message {num_str}from {__title__}.")
+        webhook.enqueue_message(message)
 
     send_messages_to_webhook.delay(webhook.pk)
     logger.info("%s test messages submitted to webhook %s", count, webhook)

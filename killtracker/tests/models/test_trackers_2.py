@@ -8,6 +8,7 @@ from eveuniverse.models import EveConstellation, EveRegion, EveSolarSystem, EveT
 
 from app_utils.testing import NoSocketsTestCase
 
+from killtracker.core.discord_messages import DiscordMessage
 from killtracker.core.killmails import Killmail
 from killtracker.tests.testdata.factories import TrackerFactory
 from killtracker.tests.testdata.helpers import LoadTestDataMixin, load_killmail
@@ -107,10 +108,10 @@ class TestTrackerGenerateKillmailMessage(LoadTestDataMixin, TestCase):
         # when
         self.tracker.generate_killmail_message(killmail_json)
         # then
-        _, kwargs = mock_enqueue_message.call_args
-        content = kwargs["content"]
-        self.assertIn("My Tracker", content)
-        embed = kwargs["embeds"][0]
+        arg, _ = mock_enqueue_message.call_args
+        message: DiscordMessage = arg[0]
+        self.assertIn("My Tracker", message.content)
+        embed = message.embeds[0]
         self.assertEqual(embed.title, "Haras | Svipul | Killmail")
         self.assertEqual(embed.thumbnail.url, svipul.icon_url(size=128))
         html = markdown(embed.description)
