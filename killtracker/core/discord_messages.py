@@ -1,9 +1,11 @@
 """This module allows to create Discord messages from killmails."""
 
+from __future__ import annotations
+
 import json
 from copy import copy
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
 import dhooks_lite
 from requests.exceptions import HTTPError
@@ -20,9 +22,12 @@ from app_utils.urls import static_file_absolute_url
 from app_utils.views import humanize_value
 
 from killtracker import __title__
-from killtracker.models import Tracker
 
 from .killmails import ZKB_KILLMAIL_BASEURL, Killmail, TrackerInfo
+
+if TYPE_CHECKING:
+    from killtracker.models import Tracker
+
 
 _ICON_SIZE = 128
 
@@ -121,6 +126,8 @@ class _VictimInfo:
 
 def create_content(tracker: Tracker, intro_text: Optional[str] = None) -> str:
     """Create content for Discord message for a killmail."""
+
+    from killtracker.models import Tracker
 
     intro_parts = []
 

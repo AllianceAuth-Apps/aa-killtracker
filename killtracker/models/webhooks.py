@@ -1,8 +1,6 @@
 """Webhooks models for killtracker."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 import dhooks_lite
 from simple_mq import SimpleMQ
@@ -18,12 +16,9 @@ from app_utils.urls import static_file_absolute_url
 
 from killtracker import APP_NAME, HOMEPAGE_URL, __title__, __version__
 from killtracker.app_settings import KILLTRACKER_WEBHOOK_SET_AVATAR
+from killtracker.core.discord_messages import DiscordMessage
 from killtracker.exceptions import WebhookTooManyRequests
 from killtracker.managers import WebhookManager
-
-if TYPE_CHECKING:
-    from killtracker.core.discord_messages import DiscordMessage
-
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
@@ -149,8 +144,6 @@ class Webhook(models.Model):
 
         Returns None if the queue is empty.
         """
-        from killtracker.core.discord_messages import DiscordMessage
-
         q = self._error_queue if is_error else self._main_queue
         s = q.dequeue()
         if not s:
@@ -160,7 +153,6 @@ class Webhook(models.Model):
 
     def messages_queued(self, is_error: bool = False) -> int:
         """Returns how many message are currently in the queue."""
-
         q = self._error_queue if is_error else self._main_queue
         if not q:
             return 0
@@ -169,7 +161,6 @@ class Webhook(models.Model):
 
     def delete_queued_messages(self, is_error: bool = False) -> int:
         """Deletes all messages in a queue and returns how many messages where deleted."""
-
         q = self._error_queue if is_error else self._main_queue
         if not q:
             return 0

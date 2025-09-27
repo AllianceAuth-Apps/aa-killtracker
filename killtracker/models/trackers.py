@@ -28,6 +28,7 @@ from app_utils.logging import LoggerAddTag
 from killtracker import __title__
 from killtracker.app_settings import KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER
 from killtracker.constants import EveCategoryId, EveGroupId
+from killtracker.core import discord_messages
 from killtracker.core.killmails import Killmail
 from killtracker.managers import TrackerManager
 
@@ -885,7 +886,6 @@ class Tracker(models.Model):
 
         Returns the new queue size.
         """
-        from killtracker.core import discord_messages
 
         message = discord_messages.DiscordMessage(
             killmail_id=killmail.id,
