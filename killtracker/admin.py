@@ -4,6 +4,7 @@
 
 
 from django.contrib import admin
+from django.db.models import QuerySet
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.utils.safestring import mark_safe
@@ -50,17 +51,17 @@ class WebhookAdmin(admin.ModelAdmin):
     list_filter = ("is_enabled",)
     ordering = ("name",)
 
-    def _messages_in_queue(self, obj):
-        return obj.main_queue.size()
+    def _messages_in_queue(self, obj: Webhook):
+        return obj.messages_queued()
 
     actions = ["send_test_message", "purge_messages"]
 
     @admin.display(description="Purge queued messages of selected webhooks")
-    def purge_messages(self, request, queryset):
+    def purge_messages(self, request, queryset: QuerySet[Webhook]):
         actions_count = 0
         killmails_deleted = 0
         for webhook in queryset:
-            killmails_deleted += webhook.main_queue.clear()
+            killmails_deleted += webhook.delete_queued_messages()
             actions_count += 1
         self.message_user(
             request,

@@ -51,8 +51,8 @@ if "discord" in app_labels():
             self.assertTrue(
                 mock_import_discord_user.return_value.objects.group_to_role.called
             )
-            self.assertEqual(self.webhook_1.main_queue.size(), 1)
-            message = json.loads(self.webhook_1.main_queue.dequeue())
+            self.assertEqual(self.webhook_1._main_queue.size(), 1)
+            message = json.loads(self.webhook_1._main_queue.dequeue())
             self.assertIn(f"<@&{self.group_1.pk}>", message["content"])
 
         def test_can_ping_multiple_groups(self, mock_import_discord_user):
@@ -70,8 +70,8 @@ if "discord" in app_labels():
             self.assertTrue(
                 mock_import_discord_user.return_value.objects.group_to_role.called
             )
-            self.assertEqual(self.webhook_1.main_queue.size(), 1)
-            message = json.loads(self.webhook_1.main_queue.dequeue())
+            self.assertEqual(self.webhook_1._main_queue.size(), 1)
+            message = json.loads(self.webhook_1._main_queue.dequeue())
             self.assertIn(f"<@&{self.group_1.pk}>", message["content"])
             self.assertIn(f"<@&{self.group_2.pk}>", message["content"])
 
@@ -91,8 +91,8 @@ if "discord" in app_labels():
             self.assertTrue(
                 mock_import_discord_user.return_value.objects.group_to_role.called
             )
-            self.assertEqual(self.webhook_1.main_queue.size(), 1)
-            message = json.loads(self.webhook_1.main_queue.dequeue())
+            self.assertEqual(self.webhook_1._main_queue.size(), 1)
+            message = json.loads(self.webhook_1._main_queue.dequeue())
             self.assertIn(f"<@&{self.group_1.pk}>", message["content"])
             self.assertIn("@here", message["content"])
 
@@ -110,6 +110,6 @@ if "discord" in app_labels():
             self.assertTrue(
                 mock_import_discord_user.return_value.objects.group_to_role.called
             )
-            self.assertEqual(self.webhook_1.main_queue.size(), 1)
-            message = json.loads(self.webhook_1.main_queue.dequeue())
+            self.assertEqual(self.webhook_1._main_queue.size(), 1)
+            message = json.loads(self.webhook_1._main_queue.dequeue())
             self.assertNotIn(f"<@&{self.group_1.pk}>", message["content"])

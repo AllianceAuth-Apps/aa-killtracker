@@ -85,7 +85,7 @@ class TestRunKilltracker(TestTrackerBase):
         mock_is_shutting_down.return_value = False
         mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
         mock_is_esi_online.return_value = True
-        self.webhook_1.error_queue.enqueue(load_killmail(10000004).asjson())
+        self.webhook_1._error_queue.enqueue(load_killmail(10000004).asjson())
         # when
         got = run_killtracker()
         # then
@@ -93,8 +93,8 @@ class TestRunKilltracker(TestTrackerBase):
         self.assertEqual(mock_run_tracker.delay.call_count, 6)
         self.assertEqual(mock_store_killmail.si.call_count, 0)
         self.assertFalse(mock_delete_stale_killmails.delay.called)
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
-        self.assertEqual(self.webhook_1.error_queue.size(), 0)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
     @patch(MODULE_PATH + ".KILLTRACKER_STORING_KILLMAILS_ENABLED", False)
     def test_should_abort_when_esi_is_offline(
@@ -282,7 +282,7 @@ class TestGenerateKillmailMessage(TestTrackerBase):
         generate_killmail_message(self.tracker_1.pk, self.killmail_id)
         # then
         self.assertTrue(mock_send_messages_to_webhook.delay.called)
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
         self.assertFalse(mock_retry.called)
 
     @patch(MODULE_PATH + ".KILLTRACKER_GENERATE_MESSAGE_MAX_RETRIES", 3)
@@ -298,7 +298,7 @@ class TestGenerateKillmailMessage(TestTrackerBase):
         with self.assertRaises(RuntimeError):
             generate_killmail_message(self.tracker_1.pk, self.killmail_id)
         self.assertFalse(mock_send_messages_to_webhook.delay.called)
-        self.assertEqual(self.webhook_1.main_queue.size(), 0)
+        self.assertEqual(self.webhook_1._main_queue.size(), 0)
         self.assertEqual(mock_retry.call_count, 4)
 
 
@@ -309,8 +309,7 @@ class TestSendMessagesToWebhook(TestTrackerBase):
     def setUp(self) -> None:
         cache.clear()
 
-    def test_one_message(self, mock_send_message):
-        """when one message in queue, then send it and retry with delay"""
+    def test_should_send_one_message(self, mock_send_message):
         # given
         mock_send_message.return_value = dhooks_lite.WebhookResponse(
             {}, status_code=200
@@ -320,8 +319,8 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 1)
-        self.assertEqual(self.webhook_1.main_queue.size(), 0)
-        self.assertEqual(self.webhook_1.error_queue.size(), 0)
+        self.assertEqual(self.webhook_1._main_queue.size(), 0)
+        self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
     def test_three_message(self, mock_send_message):
         """when three messages in queue, then sends them and returns 3"""
@@ -336,8 +335,8 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 3)
-        self.assertEqual(self.webhook_1.main_queue.size(), 0)
-        self.assertEqual(self.webhook_1.error_queue.size(), 0)
+        self.assertEqual(self.webhook_1._main_queue.size(), 0)
+        self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
     def test_no_messages(self, mock_send_message):
         """when no messages in queue, then do nothing"""
@@ -349,8 +348,8 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 0)
-        self.assertEqual(self.webhook_1.main_queue.size(), 0)
-        self.assertEqual(self.webhook_1.error_queue.size(), 0)
+        self.assertEqual(self.webhook_1._main_queue.size(), 0)
+        self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
     def test_failed_message(self, mock_send_message):
         """when message sending failed, then put message in error queue"""
@@ -363,8 +362,8 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 1)
-        self.assertEqual(self.webhook_1.main_queue.size(), 0)
-        self.assertEqual(self.webhook_1.error_queue.size(), 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 0)
+        self.assertEqual(self.webhook_1._error_queue.size(), 1)
 
     def test_abort_on_too_many_requests(self, mock_send_message):
         """
@@ -378,7 +377,7 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 1)
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
 
 
 @patch(MODULE_PATH + ".logger", spec=True)
@@ -412,7 +411,7 @@ class TestStoreKillmail(TestTrackerBase):
 @patch(MODULE_PATH + ".logger", spec=True)
 class TestSendTestKillmailsToWebhook(TestTrackerBase):
     def setUp(self) -> None:
-        self.webhook_1.main_queue.clear()
+        self.webhook_1._main_queue.clear()
 
     def test_run_normal(self, mock_logger, mock_execute):
         # given

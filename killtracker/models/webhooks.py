@@ -67,8 +67,8 @@ class Webhook(models.Model):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.main_queue = self._create_queue("main")
-        self.error_queue = self._create_queue("error")
+        self._main_queue = self._create_queue("main")
+        self._error_queue = self._create_queue("error")
 
     def __str__(self) -> str:
         return self.name
@@ -82,8 +82,8 @@ class Webhook(models.Model):
         # method to avoid modifying the original state.
         state = self.__dict__.copy()
         # Remove the unpicklable entries.
-        del state["main_queue"]
-        del state["error_queue"]
+        del state["_main_queue"]
+        del state["_error_queue"]
         return state
 
     def __setstate__(self, state):
@@ -91,15 +91,15 @@ class Webhook(models.Model):
         self.__dict__.update(state)
         # Restore the previously opened file's state. To do so, we need to
         # reopen it and read from it until the line count is restored.
-        self.main_queue = self._create_queue("main")
-        self.error_queue = self._create_queue("error")
+        self._main_queue = self._create_queue("main")
+        self._error_queue = self._create_queue("error")
 
     def save(self, *args, **kwargs):
         is_new = self.id is None  # type: ignore
         super().save(*args, **kwargs)
         if is_new:
-            self.main_queue = self._create_queue("main")
-            self.error_queue = self._create_queue("error")
+            self._main_queue = self._create_queue("main")
+            self._error_queue = self._create_queue("error")
 
     def _create_queue(self, suffix: str) -> Optional[SimpleMQ]:
         redis_client = get_redis_client()
@@ -114,24 +114,25 @@ class Webhook(models.Model):
         returns number of moved messages.
         """
         counter = 0
-        if self.error_queue and self.main_queue:
+        if self._error_queue and self._main_queue:
             while True:
-                message = self.error_queue.dequeue()
+                message = self._error_queue.dequeue()
                 if message is None:
                     break
 
-                self.main_queue.enqueue(message)
+                self._main_queue.enqueue(message)
                 counter += 1
 
         return counter
 
-    def enqueue_message(self, message: DiscordMessage) -> int:
+    def enqueue_message(self, message: DiscordMessage, is_error: bool = False) -> int:
         """Enqueues a discord message to be send with this webhook.
 
         Returns the updated number of messages in the main queue.
         """
+        q = self._error_queue if is_error else self._main_queue
 
-        if not self.main_queue:
+        if not q:
             return 0
 
         if KILLTRACKER_WEBHOOK_SET_AVATAR:
@@ -141,7 +142,39 @@ class Webhook(models.Model):
             brand_url = static_file_absolute_url("killtracker/killtracker_logo.png")
             message.avatar_url = brand_url
 
-        return self.main_queue.enqueue(message.to_json())
+        return q.enqueue(message.to_json())
+
+    def dequeue_message(self, is_error: bool = False) -> Optional[DiscordMessage]:
+        """Dequeues a message from the main queue and return it.
+
+        Returns None if the queue is empty.
+        """
+        from killtracker.core.discord_messages import DiscordMessage
+
+        q = self._error_queue if is_error else self._main_queue
+        s = q.dequeue()
+        if not s:
+            return None
+
+        return DiscordMessage.from_json(s)
+
+    def messages_queued(self, is_error: bool = False) -> int:
+        """Returns how many message are currently in the queue."""
+
+        q = self._error_queue if is_error else self._main_queue
+        if not q:
+            return 0
+
+        return q.size()
+
+    def delete_queued_messages(self, is_error: bool = False) -> int:
+        """Deletes all messages in a queue and returns how many messages where deleted."""
+
+        q = self._error_queue if is_error else self._main_queue
+        if not q:
+            return 0
+
+        return q.clear()
 
     def send_message(self, message: DiscordMessage) -> dhooks_lite.WebhookResponse:
         """Send a message to the webhook."""

@@ -109,11 +109,11 @@ def run_killtracker(self: Task) -> int:
 
 @shared_task(bind=True, max_retries=None)
 def run_tracker(
-    self, tracker_pk: int, killmail_id: int, ignore_max_age: bool = False
+    self: Task, tracker_pk: int, killmail_id: int, ignore_max_age: bool = False
 ) -> None:
     """Run tracker for given killmail and trigger sending if needed."""
     retry_task_if_esi_is_down(self)
-    tracker = Tracker.objects.get_cached(
+    tracker: Tracker = Tracker.objects.get_cached(
         pk=tracker_pk,
         select_related="webhook",
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
@@ -126,15 +126,15 @@ def run_tracker(
         logger.info("%s: Killmail %d matches", tracker, killmail_id)
         killmail_new.save()
         generate_killmail_message.delay(tracker_pk=tracker_pk, killmail_id=killmail_id)
-    elif tracker.webhook.main_queue.size():
+    elif tracker.webhook.messages_queued():
         send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
 
 
 @shared_task(bind=True, max_retries=None)
-def generate_killmail_message(self, tracker_pk: int, killmail_id: int) -> None:
+def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> None:
     """Generate and enqueue message from given killmail and start sending."""
     retry_task_if_esi_is_down(self)
-    tracker = Tracker.objects.get_cached(
+    tracker: Tracker = Tracker.objects.get_cached(
         pk=tracker_pk,
         select_related="webhook",
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
@@ -203,17 +203,15 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
         logger.info("%s: Webhook is disabled - aborting", webhook)
         return
 
-    message_json = webhook.main_queue.dequeue()
-    if not message_json:
+    message = webhook.dequeue_message()
+    if not message:
         logger.debug("%s: No more messages to send for webhook", webhook)
         return
-
-    message = DiscordMessage.from_json(message_json)
 
     try:
         response: dhooks_lite.WebhookResponse = webhook.send_message(message)
     except WebhookTooManyRequests as ex:
-        webhook.main_queue.enqueue(message_json)
+        webhook.enqueue_message(message)
         logger.warning(
             "%s: Too many requests for webhook. Blocked for %s seconds. Aborting.",
             webhook,
@@ -222,7 +220,7 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
         return
 
     if not response.status_ok:
-        webhook.error_queue.enqueue(message_json)
+        webhook.enqueue_message(message, is_error=True)
         logger.warning(
             "%s: Failed to send message for Killmail %d to webhook, will retry. "
             "HTTP status code: %d, response: %s",

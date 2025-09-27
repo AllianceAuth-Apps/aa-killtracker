@@ -848,7 +848,7 @@ class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
 class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
     def setUp(self) -> None:
         self.tracker = TrackerFactory(name="My Tracker", webhook=self.webhook_1)
-        self.webhook_1.main_queue.clear()
+        self.webhook_1._main_queue.clear()
 
     @patch(MODELS_PATH + ".webhooks.KILLTRACKER_WEBHOOK_SET_AVATAR", True)
     @patch("eveuniverse.models.universe_2.esi")
@@ -866,8 +866,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
-        message = json.loads(self.webhook_1.main_queue.dequeue())
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        message = json.loads(self.webhook_1._main_queue.dequeue())
 
         self.assertEqual(message["username"], "Killtracker")
         self.assertIsNotNone(message["avatar_url"])
@@ -893,8 +893,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
-        message = json.loads(self.webhook_1.main_queue.dequeue())
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        message = json.loads(self.webhook_1._main_queue.dequeue())
         self.assertNotIn("username", message)
         self.assertNotIn("avatar_url", message)
         self.assertIn("My Tracker", message["content"])
@@ -906,8 +906,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
-        message = json.loads(self.webhook_1.main_queue.dequeue())
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        message = json.loads(self.webhook_1._main_queue.dequeue())
         self.assertIn("| Fleetkill", message["embeds"][0]["title"])
 
     def test_can_add_intro_text(self):
@@ -915,8 +915,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(killmail, intro_text="Intro Text")
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
-        message = json.loads(self.webhook_1.main_queue.dequeue())
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        message = json.loads(self.webhook_1._main_queue.dequeue())
         self.assertIn("Intro Text", message["content"])
 
     def test_without_tracker_info(self):
@@ -924,7 +924,7 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
 
     def test_can_ping_everybody(self):
         tracker = TrackerFactory(
@@ -935,8 +935,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
-        message = json.loads(self.webhook_1.main_queue.dequeue())
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        message = json.loads(self.webhook_1._main_queue.dequeue())
         self.assertIn("@everybody", message["content"])
 
     def test_can_ping_here(self):
@@ -947,8 +947,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
-        message = json.loads(self.webhook_1.main_queue.dequeue())
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        message = json.loads(self.webhook_1._main_queue.dequeue())
         self.assertIn("@here", message["content"])
 
     def test_can_ping_nobody(self):
@@ -958,8 +958,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
-        message = json.loads(self.webhook_1.main_queue.dequeue())
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        message = json.loads(self.webhook_1._main_queue.dequeue())
         self.assertNotIn("@everybody", message["content"])
         self.assertNotIn("@here", message["content"])
 
@@ -970,8 +970,8 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
-        message = json.loads(self.webhook_1.main_queue.dequeue())
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        message = json.loads(self.webhook_1._main_queue.dequeue())
         self.assertNotIn("Ping Nobody", message["content"])
 
     def test_can_send_npc_killmail(self):
@@ -979,28 +979,28 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
 
     def test_can_handle_victim_without_character(self):
         killmail = self.tracker.process_killmail(load_killmail(10000501))
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
 
     def test_can_handle_victim_without_corporation(self):
         killmail = self.tracker.process_killmail(load_killmail(10000502))
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
 
     def test_can_handle_final_attacker_with_no_character(self):
         killmail = self.tracker.process_killmail(load_killmail(10000503))
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
 
     def test_can_handle_matching_type_ids(self):
         svipul = EveType.objects.get(id=34562)
@@ -1009,4 +1009,4 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
 
         self.tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
-        self.assertEqual(self.webhook_1.main_queue.size(), 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
