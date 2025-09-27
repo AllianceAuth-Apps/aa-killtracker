@@ -51,7 +51,7 @@ class DiscordMessage:
             raise ValueError("Message must have content or embeds to be valid")
 
     def to_json(self) -> str:
-        """Returns a Discord message as JSON object."""
+        """Converts a Discord message into a JSON object and returns it."""
 
         if self.embeds:
             embeds_list = [obj.asdict() for obj in self.embeds]
@@ -76,7 +76,7 @@ class DiscordMessage:
 
     @classmethod
     def from_json(cls, s: str) -> "DiscordMessage":
-        """Returns a DiscordMessage created from a JSON object."""
+        """Creates a DiscordMessage object from an JSON object and returns it."""
         message1: dict = json.loads(s, cls=JSONDateTimeDecoder)
         message2 = copy(message1)
         if message1.get("embeds"):
@@ -87,6 +87,18 @@ class DiscordMessage:
         else:
             message2["embeds"] = None
         return cls(**message2)
+
+    @classmethod
+    def from_killmail(
+        cls, tracker: Tracker, killmail: Killmail, intro_text: Optional[str] = None
+    ) -> "DiscordMessage":
+        """Creates a DiscordMessage object from a Killmail and returns it."""
+        m = DiscordMessage(
+            killmail_id=killmail.id,
+            content=_create_content(tracker, intro_text),
+            embeds=[_create_embed(tracker, killmail)],
+        )
+        return m
 
 
 @dataclass(frozen=True)
@@ -124,7 +136,7 @@ class _VictimInfo:
     ship_type_icon_url: str
 
 
-def create_content(tracker: Tracker, intro_text: Optional[str] = None) -> str:
+def _create_content(tracker: Tracker, intro_text: Optional[str] = None) -> str:
     """Create content for Discord message for a killmail."""
 
     from killtracker.models import Tracker
@@ -175,7 +187,7 @@ def _import_discord_user():
     return DiscordUser
 
 
-def create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
+def _create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
     """Create Discord embed for a killmail."""
 
     resolver: EveEntityNameResolver = EveEntity.objects.bulk_resolve_names(  # type: ignore
@@ -210,7 +222,21 @@ def create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
     title = _calc_title(killmail, resolver, main_org, victim)
     thumbnail_url = _calc_thumbnail_url(victim, main_org)
 
-    return _create_embed(killmail, tracker, victim, description, title, thumbnail_url)
+    author = _calc_author(victim)
+    zkb_icon_url = static_file_absolute_url("killtracker/zkb_icon.png")
+    embed_color = int(tracker.color[1:], 16) if tracker and tracker.color else None
+
+    embed = dhooks_lite.Embed(
+        author=author,
+        description=description,
+        title=title,
+        url=f"{ZKB_KILLMAIL_BASEURL}{killmail.id}/",
+        thumbnail=dhooks_lite.Thumbnail(url=thumbnail_url),
+        footer=dhooks_lite.Footer(text="zKillboard", icon_url=zkb_icon_url),
+        timestamp=killmail.time,
+        color=embed_color,
+    )
+    return embed
 
 
 def _calc_author(victim: _VictimInfo):
@@ -474,31 +500,6 @@ def _calc_title(
         return f"{solar_system_name} | {main_org.name} | Fleetkill"
 
     return f"{solar_system_name} | {victim.ship_type} | Killmail"
-
-
-def _create_embed(
-    killmail: Killmail,
-    tracker: Tracker,
-    victim: _VictimInfo,
-    description: str,
-    title: str,
-    thumbnail_url: str,
-):
-    author = _calc_author(victim)
-    zkb_icon_url = static_file_absolute_url("killtracker/zkb_icon.png")
-    embed_color = int(tracker.color[1:], 16) if tracker and tracker.color else None
-
-    embed = dhooks_lite.Embed(
-        author=author,
-        description=description,
-        title=title,
-        url=f"{ZKB_KILLMAIL_BASEURL}{killmail.id}/",
-        thumbnail=dhooks_lite.Thumbnail(url=thumbnail_url),
-        footer=dhooks_lite.Footer(text="zKillboard", icon_url=zkb_icon_url),
-        timestamp=killmail.time,
-        color=embed_color,
-    )
-    return embed
 
 
 def _character_zkb_link(

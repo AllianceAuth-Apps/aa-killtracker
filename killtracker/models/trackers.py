@@ -28,7 +28,7 @@ from app_utils.logging import LoggerAddTag
 from killtracker import __title__
 from killtracker.app_settings import KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER
 from killtracker.constants import EveCategoryId, EveGroupId
-from killtracker.core import discord_messages
+from killtracker.core.discord_messages import DiscordMessage
 from killtracker.core.killmails import Killmail
 from killtracker.managers import TrackerManager
 
@@ -886,10 +886,5 @@ class Tracker(models.Model):
 
         Returns the new queue size.
         """
-
-        message = discord_messages.DiscordMessage(
-            killmail_id=killmail.id,
-            content=discord_messages.create_content(self, intro_text),
-            embeds=[discord_messages.create_embed(self, killmail)],
-        )
+        message = DiscordMessage.from_killmail(self, killmail, intro_text)
         return self.webhook.enqueue_message(message)
