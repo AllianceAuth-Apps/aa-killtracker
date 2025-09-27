@@ -29,7 +29,11 @@ from killtracker.app_settings import (
 )
 from killtracker.core import worker_shutdown
 from killtracker.core.discord_messages import DiscordMessage
-from killtracker.core.killmails import Killmail, ZKBTooManyRequestsError
+from killtracker.core.killmails import (
+    Killmail,
+    KillmailDoesNotExist,
+    ZKBTooManyRequestsError,
+)
 from killtracker.exceptions import WebhookTooManyRequests
 from killtracker.models import EveKillmail, Tracker, Webhook
 
@@ -118,7 +122,12 @@ def run_tracker(
         select_related="webhook",
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
-    killmail = Killmail.get(killmail_id)
+    try:
+        killmail = Killmail.get(killmail_id)
+    except KillmailDoesNotExist as ex:
+        logger.error("Aborting. %s", ex)
+        return
+
     killmail_new = tracker.process_killmail(
         killmail=killmail, ignore_max_age=ignore_max_age
     )
@@ -139,7 +148,11 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
         select_related="webhook",
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
-    killmail = Killmail.get(killmail_id)
+    try:
+        killmail = Killmail.get(killmail_id)
+    except KillmailDoesNotExist as ex:
+        logger.error("Aborting. %s", ex)
+        return
     try:
         tracker.generate_killmail_message(killmail)
     except Exception as ex:
@@ -166,7 +179,11 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
 def store_killmail(killmail_id: int) -> None:
     """Stores killmail as EveKillmail object."""
-    killmail = Killmail.get(killmail_id)
+    try:
+        killmail = Killmail.get(killmail_id)
+    except KillmailDoesNotExist as ex:
+        logger.error("Aborting. %s", ex)
+        return
     try:
         EveKillmail.objects.create_from_killmail(killmail, resolve_ids=False)
     except IntegrityError:

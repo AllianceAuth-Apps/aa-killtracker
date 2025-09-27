@@ -371,7 +371,10 @@ class Killmail(_KillmailBase):
 
     @classmethod
     def get(cls, id: int) -> "Killmail":
-        """Fetch a killmail from temporary storage."""
+        """Fetch a killmail from temporary storage.
+
+        Raises KillmailDoesNotExist if killmail does not exit.
+        """
         data = cache.get(key=cls._storage_key(id))
         if not data:
             raise KillmailDoesNotExist(
