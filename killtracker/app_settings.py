@@ -6,7 +6,7 @@ KILLTRACKER_REDISQ_LOCK_TIMEOUT = clean_setting("KILLTRACKER_REDISQ_LOCK_TIMEOUT
 """Timeout for lock to ensure atomic access to ZKB RedisQ."""
 
 KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER = clean_setting(
-    "KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER", 60
+    "KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER", 600
 )
 """Ignore killmails that are older than the given number in minutes
 sometimes killmails appear belated on ZKB,
@@ -14,7 +14,7 @@ this feature ensures they don't create new alerts.
 """
 
 KILLTRACKER_MAX_KILLMAILS_PER_RUN = clean_setting(
-    "KILLTRACKER_MAX_KILLMAILS_PER_RUN", 100
+    "KILLTRACKER_MAX_KILLMAILS_PER_RUN", 500
 )
 """Maximum number of killmails retrieved from ZKB by task run."""
 
@@ -62,11 +62,14 @@ when creating trackers.
 #####################
 # INTERNAL SETTINGS
 
-KILLTRACKER_REDISQ_TTW = clean_setting("KILLTRACKER_REDISQ_TTW", 5)
+KILLTRACKER_REDISQ_TTW = clean_setting("KILLTRACKER_REDISQ_TTW", 1)
 """Max duration to wait for new killmails from redisq in seconds."""
 
 KILLTRACKER_TASKS_TIMEOUT = clean_setting("KILLTRACKER_TASKS_TIMEOUT", 1_800)
-"""Tasks hard timeout."""
+"""Tasks hard timeout in seconds."""
+
+KILLTRACKER_RUN_TIMEOUT = clean_setting("KILLTRACKER_RUN_TIMEOUT", 55)
+"""Timeout for killtracker run in seconds."""
 
 KILLTRACKER_DISCORD_SEND_DELAY = clean_setting(
     "KILLTRACKER_DISCORD_SEND_DELAY", default_value=2, min_value=1, max_value=900

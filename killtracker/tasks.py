@@ -1,8 +1,9 @@
 """Tasks for killtracker."""
 
-from datetime import timedelta
+import time
 
-from celery import chain, shared_task
+import dhooks_lite
+from celery import Task, chain, shared_task
 
 from django.db import IntegrityError
 from django.utils.timezone import now
@@ -11,58 +12,81 @@ from eveuniverse.tasks import update_unresolved_eve_entities
 
 from allianceauth.services.hooks import get_extension_logger
 from allianceauth.services.tasks import QueueOnce
-from app_utils.caching import cached_queryset
 from app_utils.esi import retry_task_if_esi_is_down
 from app_utils.logging import LoggerAddTag
 
-from . import APP_NAME, __title__
-from .app_settings import (
+from killtracker import __title__
+from killtracker.app_settings import (
     KILLTRACKER_DISCORD_SEND_DELAY,
     KILLTRACKER_GENERATE_MESSAGE_MAX_RETRIES,
     KILLTRACKER_GENERATE_MESSAGE_RETRY_COUNTDOWN,
     KILLTRACKER_MAX_KILLMAILS_PER_RUN,
     KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS,
+    KILLTRACKER_RUN_TIMEOUT,
     KILLTRACKER_STORING_KILLMAILS_ENABLED,
     KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     KILLTRACKER_TASKS_TIMEOUT,
-    KILLTRACKER_ZKB_REQUEST_DELAY,
 )
-from .core.killmails import Killmail
-from .exceptions import WebhookTooManyRequests
-from .models import EveKillmail, Tracker, Webhook
+from killtracker.core import worker_shutdown
+from killtracker.core.discord_messages import DiscordMessage
+from killtracker.core.killmails import (
+    Killmail,
+    KillmailDoesNotExist,
+    ZKBTooManyRequestsError,
+)
+from killtracker.exceptions import WebhookTooManyRequests
+from killtracker.models import EveKillmail, Tracker, Webhook
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-@shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
-def run_killtracker(runs: int = 0) -> None:
-    """Main task for running the Killtracker.
+@shared_task(bind=True, base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)
+def run_killtracker(self: Task) -> int:
+    """Try to fetch new killmails from ZKB API and start trackers.
 
-    Will fetch new killmails from ZKB and start running trackers for them
+    This is the main periodic task for running Killtracker.
     """
     if not is_esi_online():
         logger.warning("ESI is currently offline. Aborting")
-        return
+        return 0
 
-    if runs == 0:
-        logger.info("Killtracker run started...")
-        qs = cached_queryset(
-            Webhook.objects.filter(is_enabled=True),
-            key=f"{APP_NAME}_enabled_webhooks",
-            timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
-        )
-        for webhook in qs:
-            webhook.reset_failed_messages()
+    for webhook in Webhook.objects.filter(is_enabled=True):
+        webhook.reset_failed_messages()
 
-    killmail = Killmail.create_from_zkb_redisq()
-    if killmail:
+    started = time.time()
+
+    def is_timed_out() -> bool:
+        elapsed = time.time() - started
+        return KILLTRACKER_RUN_TIMEOUT - elapsed <= 0
+
+    killmails_count = 0
+    for _ in range(KILLTRACKER_MAX_KILLMAILS_PER_RUN):
+        if is_timed_out():
+            break
+
+        if worker_shutdown.is_shutting_down(self):
+            logger.debug("Aborting due to worker shutdown")
+            break
+
+        killmail = None
+        try:
+            killmail = Killmail.create_from_zkb_redisq()
+        except ZKBTooManyRequestsError as ex:
+            seconds = (ex.retry_at - now()).total_seconds()
+            if seconds < 0:
+                break
+
+            logger.warning(
+                "Killtracker has been baned from ZKB API for %f seconds", seconds
+            )
+            raise self.retry(countdown=seconds)
+
+        if not killmail:
+            break
+
+        killmails_count += 1
         killmail.save()
-        qs = cached_queryset(
-            Tracker.objects.filter(is_enabled=True),
-            key=f"{APP_NAME}_enabled_trackers",
-            timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
-        )
-        for tracker in qs:
+        for tracker in Tracker.objects.filter(is_enabled=True):
             run_tracker.delay(tracker_pk=tracker.pk, killmail_id=killmail.id)
 
         if KILLTRACKER_STORING_KILLMAILS_ENABLED:
@@ -71,59 +95,64 @@ def run_killtracker(runs: int = 0) -> None:
                 update_unresolved_eve_entities.si(),
             ).delay()
 
-    total_killmails = runs + (1 if killmail else 0)
-    if killmail and total_killmails < KILLTRACKER_MAX_KILLMAILS_PER_RUN:
-        run_killtracker.apply_async(
-            kwargs={"runs": runs + 1},
-            eta=now() + timedelta(milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY),
-        )
-    else:
-        if (
-            KILLTRACKER_STORING_KILLMAILS_ENABLED
-            and KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS > 0
-        ):
-            delete_stale_killmails.delay()
+    elapsed = time.time() - started
+    logger.info(
+        "Killtracker processed %d new killmails from ZKB in %f seconds",
+        killmails_count,
+        elapsed,
+    )
 
-        logger.info(
-            "Killtracker runs completed. %d killmails received from ZKB",
-            total_killmails,
-        )
+    if (
+        KILLTRACKER_STORING_KILLMAILS_ENABLED
+        and KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS > 0
+    ):
+        delete_stale_killmails.delay()
+
+    return killmails_count
 
 
 @shared_task(bind=True, max_retries=None)
 def run_tracker(
-    self, tracker_pk: int, killmail_id: int, ignore_max_age: bool = False
+    self: Task, tracker_pk: int, killmail_id: int, ignore_max_age: bool = False
 ) -> None:
     """Run tracker for given killmail and trigger sending if needed."""
     retry_task_if_esi_is_down(self)
-    tracker = Tracker.objects.get_cached(
+    tracker: Tracker = Tracker.objects.get_cached(
         pk=tracker_pk,
         select_related="webhook",
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
-    logger.info("%s: Started running tracker", tracker)
-    killmail = Killmail.get(killmail_id)
+    try:
+        killmail = Killmail.get(killmail_id)
+    except KillmailDoesNotExist as ex:
+        logger.error("Aborting. %s", ex)
+        return
+
     killmail_new = tracker.process_killmail(
         killmail=killmail, ignore_max_age=ignore_max_age
     )
     if killmail_new:
+        logger.info("%s: Killmail %d matches", tracker, killmail_id)
         killmail_new.save()
         generate_killmail_message.delay(tracker_pk=tracker_pk, killmail_id=killmail_id)
-    elif tracker.webhook.main_queue.size():
+    elif tracker.webhook.messages_queued():
         send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
 
 
 @shared_task(bind=True, max_retries=None)
-def generate_killmail_message(self, tracker_pk: int, killmail_id: int) -> None:
+def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> None:
     """Generate and enqueue message from given killmail and start sending."""
     retry_task_if_esi_is_down(self)
-    tracker = Tracker.objects.get_cached(
+    tracker: Tracker = Tracker.objects.get_cached(
         pk=tracker_pk,
         select_related="webhook",
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
-    killmail = Killmail.get(killmail_id)
-    logger.info("%s: Generating message from killmail %s", tracker, killmail.id)
+    try:
+        killmail = Killmail.get(killmail_id)
+    except KillmailDoesNotExist as ex:
+        logger.error("Aborting. %s", ex)
+        return
     try:
         tracker.generate_killmail_message(killmail)
     except Exception as ex:
@@ -142,12 +171,19 @@ def generate_killmail_message(self, tracker_pk: int, killmail_id: int) -> None:
         )
 
     send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
+    logger.info(
+        "%s: Added message from killmail %s to send queue", tracker, killmail.id
+    )
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
 def store_killmail(killmail_id: int) -> None:
-    """stores killmail as EveKillmail object"""
-    killmail = Killmail.get(killmail_id)
+    """Stores killmail as EveKillmail object."""
+    try:
+        killmail = Killmail.get(killmail_id)
+    except KillmailDoesNotExist as ex:
+        logger.error("Aborting. %s", ex)
+        return
     try:
         EveKillmail.objects.create_from_killmail(killmail, resolve_ids=False)
     except IntegrityError:
@@ -160,7 +196,7 @@ def store_killmail(killmail_id: int) -> None:
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
 def delete_stale_killmails() -> None:
-    """deleted all EveKillmail objects that are considered stale"""
+    """Deletes all EveKillmail objects that are considered stale."""
     _, details = EveKillmail.objects.delete_stale()
     if details:
         logger.info("Deleted %d stale killmails", details["killtracker.EveKillmail"])
@@ -173,10 +209,10 @@ def delete_stale_killmails() -> None:
     retry_backoff=False,
     max_retries=None,
 )
-def send_messages_to_webhook(self, webhook_pk: int) -> None:
-    """send all queued messages to given Webhook"""
+def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
+    """Sends all queued messages to given Webhook."""
 
-    webhook = Webhook.objects.get_cached(
+    webhook: Webhook = Webhook.objects.get_cached(
         pk=webhook_pk,
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
@@ -184,39 +220,52 @@ def send_messages_to_webhook(self, webhook_pk: int) -> None:
         logger.info("%s: Webhook is disabled - aborting", webhook)
         return
 
-    message = webhook.main_queue.dequeue()
-    if message:
-        logger.info("%s: Sending message to webhook", webhook)
+    message = webhook.dequeue_message()
+    if not message:
+        logger.debug("%s: No more messages to send for webhook", webhook)
+        return
+
+    try:
+        response: dhooks_lite.WebhookResponse = webhook.send_message(message)
+    except WebhookTooManyRequests as ex:
+        webhook.enqueue_message(message)
+        logger.warning(
+            "%s: Too many requests for webhook. Blocked for %s seconds. Aborting.",
+            webhook,
+            ex.retry_after,
+        )
+        return
+
+    if not response.status_ok:
+        webhook.enqueue_message(message, is_error=True)
+        logger.warning(
+            "%s: Failed to send message for Killmail %d to webhook, will retry. "
+            "HTTP status code: %d, response: %s",
+            webhook,
+            message.killmail_id,
+            response.status_code,
+            response.content,
+        )
+    else:
         try:
-            response = webhook.send_message_to_webhook(message)
-        except WebhookTooManyRequests as ex:
-            webhook.main_queue.enqueue(message)
-            logger.warning(
-                "%s: Too many requests for webhook. Blocked for %s seconds. Aborting.",
-                webhook,
-                ex.retry_after,
-            )
-            return
+            message_id = response.content.get("id")
+        except AttributeError:
+            message_id = "?"
+        logger.info(
+            "%s: Discord message %s created for killmail %d",
+            webhook,
+            message_id,
+            message.killmail_id,
+        )
 
-        if not response.status_ok:
-            webhook.error_queue.enqueue(message)
-            logger.warning(
-                "%s: Failed to send message to webhook, will retry. "
-                "HTTP status code: %d, response: %s",
-                webhook,
-                response.status_code,
-                response.content,
-            )
-
-        raise self.retry(countdown=KILLTRACKER_DISCORD_SEND_DELAY)
-
-    logger.debug("%s: No more messages to send for webhook", webhook)
+    raise self.retry(countdown=KILLTRACKER_DISCORD_SEND_DELAY)
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
 def send_test_message_to_webhook(webhook_pk: int, count: int = 1) -> None:
-    """send a test message to given webhook.
-    Optional inform user about result if user ok is given
+    """Send a test message to given webhook.
+
+    Optional inform user about result if user ok is given.
     """
     try:
         webhook = Webhook.objects.get(pk=webhook_pk)
@@ -224,8 +273,10 @@ def send_test_message_to_webhook(webhook_pk: int, count: int = 1) -> None:
         logger.error("Webhook with pk = %s does not exist", webhook_pk)
         return
 
-    logger.info("Sending %s test messages to webhook %s", count, webhook)
     for num in range(count):
         num_str = f"{num+1}/{count} " if count > 1 else ""
-        webhook.enqueue_message(content=f"Test message {num_str}from {__title__}.")
+        message = DiscordMessage(content=f"Test message {num_str}from {__title__}.")
+        webhook.enqueue_message(message)
+
     send_messages_to_webhook.delay(webhook.pk)
+    logger.info("%s test messages submitted to webhook %s", count, webhook)

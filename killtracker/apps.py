@@ -9,7 +9,5 @@ class KillmailsConfig(AppConfig):
     verbose_name = f"Killtracker v{__version__}"
 
     def ready(self) -> None:
-        from . import checks  # noqa: F401 pylint: disable=unused-import
-        from .core.killmails import Killmail
-
-        Killmail.reset_lock_key()
+        import killtracker.checks  # noqa: F401 pylint: disable=unused-import
+        import killtracker.signals  # noqa: F401 pylint: disable=unused-import

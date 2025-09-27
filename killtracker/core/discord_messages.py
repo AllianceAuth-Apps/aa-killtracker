@@ -1,6 +1,11 @@
-"""Create discord messages from killmails."""
+"""This module allows to create Discord messages from killmails."""
 
-from typing import NamedTuple, Optional
+from __future__ import annotations
+
+import json
+from copy import copy
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, List, Optional
 
 import dhooks_lite
 from requests.exceptions import HTTPError
@@ -11,38 +16,116 @@ from eveuniverse.models import EveEntity, EveSolarSystem
 from allianceauth.eveonline.evelinks import dotlan, eveimageserver, zkillboard
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.django import app_labels
+from app_utils.json import JSONDateTimeDecoder, JSONDateTimeEncoder
 from app_utils.logging import LoggerAddTag
 from app_utils.urls import static_file_absolute_url
 from app_utils.views import humanize_value
 
 from killtracker import __title__
-from killtracker.models import Tracker
 
 from .killmails import ZKB_KILLMAIL_BASEURL, Killmail, TrackerInfo
 
-ICON_SIZE = 128
+if TYPE_CHECKING:
+    from killtracker.models import Tracker
+
+
+_ICON_SIZE = 128
 
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-class MainOrgInfo(NamedTuple):
+@dataclass
+class DiscordMessage:
+    """A Discord message created from a Killmail."""
+
+    avatar_url: Optional[str] = None
+    content: Optional[str] = None
+    embeds: Optional[List[dhooks_lite.Embed]] = None
+    killmail_id: int = 0  # Killmail ID this message from created from
+    tts: Optional[bool] = None
+    username: Optional[str] = None
+
+    def __post_init__(self):
+        if not self.content and not self.embeds:
+            raise ValueError("Message must have content or embeds to be valid")
+
+    def to_json(self) -> str:
+        """Converts a Discord message into a JSON object and returns it."""
+
+        if self.embeds:
+            embeds_list = [obj.asdict() for obj in self.embeds]
+        else:
+            embeds_list = None
+
+        message = {}
+        if self.killmail_id:
+            message["killmail_id"] = self.killmail_id
+        if self.content:
+            message["content"] = self.content
+        if embeds_list:
+            message["embeds"] = embeds_list
+        if self.tts:
+            message["tts"] = self.tts
+        if self.username:
+            message["username"] = self.username
+        if self.avatar_url:
+            message["avatar_url"] = self.avatar_url
+
+        return json.dumps(message, cls=JSONDateTimeEncoder)
+
+    @classmethod
+    def from_json(cls, s: str) -> "DiscordMessage":
+        """Creates a DiscordMessage object from an JSON object and returns it."""
+        message1: dict = json.loads(s, cls=JSONDateTimeDecoder)
+        message2 = copy(message1)
+        if message1.get("embeds"):
+            message2["embeds"] = [
+                dhooks_lite.Embed.from_dict(embed_dict)
+                for embed_dict in message1.get("embeds")
+            ]
+        else:
+            message2["embeds"] = None
+        return cls(**message2)
+
+    @classmethod
+    def from_killmail(
+        cls, tracker: Tracker, killmail: Killmail, intro_text: Optional[str] = None
+    ) -> "DiscordMessage":
+        """Creates a DiscordMessage object from a Killmail and returns it."""
+        m = DiscordMessage(
+            killmail_id=killmail.id,
+            content=_create_content(tracker, intro_text),
+            embeds=[_create_embed(tracker, killmail)],
+        )
+        return m
+
+
+@dataclass(frozen=True)
+class _MainOrgInfo:
     """Infos about a main organization."""
 
-    text: str = ""
+    icon_url: str = ""
     name: str = ""
-    icon_url: str = eveimageserver.alliance_logo_url(1, size=ICON_SIZE)
     show_as_fleet_kill: bool = False
+    text: str = ""
+
+    def __post_init__(self):
+        if self.icon_url == "":
+            icon_url = eveimageserver.alliance_logo_url(1, size=_ICON_SIZE)
+            object.__setattr__(self, "icon_url", icon_url)
 
 
-class FinalAttackerInfo(NamedTuple):
+@dataclass(frozen=True)
+class _FinalAttackerInfo:
     """Infos about the final attacker on a killmail."""
 
     name: str = ""
     ship_type: str = ""
 
 
-class VictimInfo(NamedTuple):
+@dataclass(frozen=True)
+class _VictimInfo:
     """Infos about the victim of a killmail."""
 
     name: str
@@ -53,8 +136,10 @@ class VictimInfo(NamedTuple):
     ship_type_icon_url: str
 
 
-def create_content(tracker: Tracker, intro_text: Optional[str] = None) -> str:
+def _create_content(tracker: Tracker, intro_text: Optional[str] = None) -> str:
     """Create content for Discord message for a killmail."""
+
+    from killtracker.models import Tracker
 
     intro_parts = []
 
@@ -102,7 +187,7 @@ def _import_discord_user():
     return DiscordUser
 
 
-def create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
+def _create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
     """Create Discord embed for a killmail."""
 
     resolver: EveEntityNameResolver = EveEntity.objects.bulk_resolve_names(  # type: ignore
@@ -111,7 +196,7 @@ def create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
 
     # self info
     distance_text = ""
-    main_org = MainOrgInfo()
+    main_org = _MainOrgInfo()
     main_ship_group_text = ""
     tracked_ship_types_text = ""
 
@@ -137,10 +222,24 @@ def create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
     title = _calc_title(killmail, resolver, main_org, victim)
     thumbnail_url = _calc_thumbnail_url(victim, main_org)
 
-    return _create_embed(killmail, tracker, victim, description, title, thumbnail_url)
+    author = _calc_author(victim)
+    zkb_icon_url = static_file_absolute_url("killtracker/zkb_icon.png")
+    embed_color = int(tracker.color[1:], 16) if tracker and tracker.color else None
+
+    embed = dhooks_lite.Embed(
+        author=author,
+        description=description,
+        title=title,
+        url=f"{ZKB_KILLMAIL_BASEURL}{killmail.id}/",
+        thumbnail=dhooks_lite.Thumbnail(url=thumbnail_url),
+        footer=dhooks_lite.Footer(text="zKillboard", icon_url=zkb_icon_url),
+        timestamp=killmail.time,
+        color=embed_color,
+    )
+    return embed
 
 
-def _calc_author(victim: VictimInfo):
+def _calc_author(victim: _VictimInfo):
     # TODO This is a workaround for Embed.Author.name. Address in dhooks_lite
     return (
         dhooks_lite.Author(
@@ -158,10 +257,10 @@ def _calc_description(
     killmail: Killmail,
     resolver: EveEntityNameResolver,
     distance_text: str,
-    main_org: MainOrgInfo,
+    main_org: _MainOrgInfo,
     main_ship_group_text: str,
     tracked_ship_types_text: str,
-    victim: VictimInfo,
+    victim: _VictimInfo,
 ):
     solar_system_text = _calc_solar_system(tracker, killmail)
     total_value = (
@@ -186,18 +285,18 @@ def _calc_description(
 
 def _calc_victim(
     tracker: Tracker, killmail: Killmail, resolver: EveEntityNameResolver
-) -> VictimInfo:
+) -> _VictimInfo:
     if killmail.victim.alliance_id:
         victim_organization = resolver.to_name(killmail.victim.alliance_id)
         victim_org_url = zkillboard.alliance_url(killmail.victim.alliance_id)
         victim_org_icon_url = eveimageserver.alliance_logo_url(
-            killmail.victim.alliance_id, size=ICON_SIZE
+            killmail.victim.alliance_id, size=_ICON_SIZE
         )
     elif killmail.victim.corporation_id:
         victim_organization = resolver.to_name(killmail.victim.corporation_id)
         victim_org_url = zkillboard.corporation_url(killmail.victim.corporation_id)
         victim_org_icon_url = eveimageserver.corporation_logo_url(
-            killmail.victim.corporation_id, size=ICON_SIZE
+            killmail.victim.corporation_id, size=_ICON_SIZE
         )
     else:
         victim_organization = ""
@@ -229,12 +328,12 @@ def _calc_victim(
     ship_type = resolver.to_name(ship_type_id) if ship_type_id else ""
 
     ship_type_icon_url = (
-        eveimageserver.type_icon_url(ship_type_id, size=ICON_SIZE)
+        eveimageserver.type_icon_url(ship_type_id, size=_ICON_SIZE)
         if ship_type_id
         else ""
     )
 
-    return VictimInfo(
+    return _VictimInfo(
         organization=victim_organization,
         org_url=victim_org_url,
         org_icon_url=victim_org_icon_url,
@@ -246,7 +345,7 @@ def _calc_victim(
 
 def _calc_final_attacker(
     tracker: Tracker, killmail: Killmail, resolver: EveEntityNameResolver
-) -> FinalAttackerInfo:
+) -> _FinalAttackerInfo:
     for attacker in killmail.attackers:
         if attacker.is_final_blow:
             final_attacker = attacker
@@ -255,7 +354,7 @@ def _calc_final_attacker(
         final_attacker = None
 
     if not final_attacker:
-        return FinalAttackerInfo()
+        return _FinalAttackerInfo()
 
     if final_attacker.corporation_id:
         final_attacker_corporation_zkb_link = _corporation_zkb_link(
@@ -286,7 +385,7 @@ def _calc_final_attacker(
 
     ship_type = resolver.to_name(ship_type_id) if ship_type_id else ""
 
-    return FinalAttackerInfo(name=final_attacker_str, ship_type=ship_type)
+    return _FinalAttackerInfo(name=final_attacker_str, ship_type=ship_type)
 
 
 def _calc_solar_system(tracker: Tracker, killmail: Killmail):
@@ -338,12 +437,12 @@ def _calc_main_group(
         if main_org_entity.is_corporation:
             main_org_link = _corporation_zkb_link(tracker, main_org_entity.id, resolver)
             main_org_icon_url = eveimageserver.corporation_logo_url(
-                main_org_entity.id, size=ICON_SIZE
+                main_org_entity.id, size=_ICON_SIZE
             )
         else:
             main_org_link = _alliance_zkb_link(tracker, main_org_entity.id, resolver)
             main_org_icon_url = eveimageserver.alliance_logo_url(
-                main_org_entity.id, size=ICON_SIZE
+                main_org_entity.id, size=_ICON_SIZE
             )
         main_org_text = f" | Main group: {main_org_link} ({main_org_entity.count})"
         show_as_fleet_kill = tracker.identify_fleets
@@ -351,7 +450,7 @@ def _calc_main_group(
         show_as_fleet_kill = False
         main_org_text = main_org_name = main_org_icon_url = ""
 
-    return MainOrgInfo(
+    return _MainOrgInfo(
         text=main_org_text,
         name=main_org_name,
         icon_url=main_org_icon_url,
@@ -380,7 +479,7 @@ def _calc_tracked_ship_types(
     return f"\nTracked ship types involved: **{ship_types_text}**"
 
 
-def _calc_thumbnail_url(victim: VictimInfo, main_org: MainOrgInfo):
+def _calc_thumbnail_url(victim: _VictimInfo, main_org: _MainOrgInfo):
     if main_org.show_as_fleet_kill:
         return main_org.icon_url
 
@@ -390,8 +489,8 @@ def _calc_thumbnail_url(victim: VictimInfo, main_org: MainOrgInfo):
 def _calc_title(
     killmail: Killmail,
     resolver: EveEntityNameResolver,
-    main_org: MainOrgInfo,
-    victim: VictimInfo,
+    main_org: _MainOrgInfo,
+    victim: _VictimInfo,
 ):
     solar_system_name = (
         resolver.to_name(killmail.solar_system_id) if killmail.solar_system_id else ""
@@ -401,31 +500,6 @@ def _calc_title(
         return f"{solar_system_name} | {main_org.name} | Fleetkill"
 
     return f"{solar_system_name} | {victim.ship_type} | Killmail"
-
-
-def _create_embed(
-    killmail: Killmail,
-    tracker: Tracker,
-    victim: VictimInfo,
-    description: str,
-    title: str,
-    thumbnail_url: str,
-):
-    author = _calc_author(victim)
-    zkb_icon_url = static_file_absolute_url("killtracker/zkb_icon.png")
-    embed_color = int(tracker.color[1:], 16) if tracker and tracker.color else None
-
-    embed = dhooks_lite.Embed(
-        author=author,
-        description=description,
-        title=title,
-        url=f"{ZKB_KILLMAIL_BASEURL}{killmail.id}/",
-        thumbnail=dhooks_lite.Thumbnail(url=thumbnail_url),
-        footer=dhooks_lite.Footer(text="zKillboard", icon_url=zkb_icon_url),
-        timestamp=killmail.time,
-        color=embed_color,
-    )
-    return embed
 
 
 def _character_zkb_link(

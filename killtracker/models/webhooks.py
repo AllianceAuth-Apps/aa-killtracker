@@ -1,7 +1,6 @@
 """Webhooks models for killtracker."""
 
-import json
-from typing import List, Optional
+from typing import Optional
 
 import dhooks_lite
 from simple_mq import SimpleMQ
@@ -12,12 +11,12 @@ from django.utils.translation import gettext_lazy as _
 
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.allianceauth import get_redis_client
-from app_utils.json import JSONDateTimeDecoder, JSONDateTimeEncoder
 from app_utils.logging import LoggerAddTag
 from app_utils.urls import static_file_absolute_url
 
 from killtracker import APP_NAME, HOMEPAGE_URL, __title__, __version__
 from killtracker.app_settings import KILLTRACKER_WEBHOOK_SET_AVATAR
+from killtracker.core.discord_messages import DiscordMessage
 from killtracker.exceptions import WebhookTooManyRequests
 from killtracker.managers import WebhookManager
 
@@ -63,8 +62,8 @@ class Webhook(models.Model):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.main_queue = self._create_queue("main")
-        self.error_queue = self._create_queue("error")
+        self._main_queue = self._create_queue("main")
+        self._error_queue = self._create_queue("error")
 
     def __str__(self) -> str:
         return self.name
@@ -78,8 +77,8 @@ class Webhook(models.Model):
         # method to avoid modifying the original state.
         state = self.__dict__.copy()
         # Remove the unpicklable entries.
-        del state["main_queue"]
-        del state["error_queue"]
+        del state["_main_queue"]
+        del state["_error_queue"]
         return state
 
     def __setstate__(self, state):
@@ -87,15 +86,15 @@ class Webhook(models.Model):
         self.__dict__.update(state)
         # Restore the previously opened file's state. To do so, we need to
         # reopen it and read from it until the line count is restored.
-        self.main_queue = self._create_queue("main")
-        self.error_queue = self._create_queue("error")
+        self._main_queue = self._create_queue("main")
+        self._error_queue = self._create_queue("error")
 
     def save(self, *args, **kwargs):
         is_new = self.id is None  # type: ignore
         super().save(*args, **kwargs)
         if is_new:
-            self.main_queue = self._create_queue("main")
-            self.error_queue = self._create_queue("error")
+            self._main_queue = self._create_queue("main")
+            self._error_queue = self._create_queue("error")
 
     def _create_queue(self, suffix: str) -> Optional[SimpleMQ]:
         redis_client = get_redis_client()
@@ -110,94 +109,70 @@ class Webhook(models.Model):
         returns number of moved messages.
         """
         counter = 0
-        if self.error_queue and self.main_queue:
+        if self._error_queue and self._main_queue:
             while True:
-                message = self.error_queue.dequeue()
+                message = self._error_queue.dequeue()
                 if message is None:
                     break
 
-                self.main_queue.enqueue(message)
+                self._main_queue.enqueue(message)
                 counter += 1
 
         return counter
 
-    def enqueue_message(
-        self,
-        content: Optional[str] = None,
-        embeds: Optional[List[dhooks_lite.Embed]] = None,
-        tts: Optional[bool] = None,
-        username: Optional[str] = None,
-        avatar_url: Optional[str] = None,
-    ) -> int:
-        """Enqueues a message to be send with this webhook"""
-        if not self.main_queue:
+    def enqueue_message(self, message: DiscordMessage, is_error: bool = False) -> int:
+        """Enqueues a discord message to be send with this webhook.
+
+        Returns the updated number of messages in the main queue.
+        """
+        q = self._error_queue if is_error else self._main_queue
+
+        if not q:
             return 0
 
-        username = __title__ if KILLTRACKER_WEBHOOK_SET_AVATAR else username
-        brand_url = static_file_absolute_url("killtracker/killtracker_logo.png")
-        avatar_url = brand_url if KILLTRACKER_WEBHOOK_SET_AVATAR else avatar_url
-        return self.main_queue.enqueue(
-            self._discord_message_asjson(
-                content=content,
-                embeds=embeds,
-                tts=tts,
-                username=username,
-                avatar_url=avatar_url,
-            )
-        )
+        if KILLTRACKER_WEBHOOK_SET_AVATAR:
+            message.username = __title__
 
-    @staticmethod
-    def _discord_message_asjson(
-        content: Optional[str] = None,
-        embeds: Optional[List[dhooks_lite.Embed]] = None,
-        tts: Optional[bool] = None,
-        username: Optional[str] = None,
-        avatar_url: Optional[str] = None,
-    ) -> str:
-        """Converts a Discord message to JSON and returns it
+        if KILLTRACKER_WEBHOOK_SET_AVATAR:
+            brand_url = static_file_absolute_url("killtracker/killtracker_logo.png")
+            message.avatar_url = brand_url
 
-        Raises ValueError if message is incomplete
+        return q.enqueue(message.to_json())
+
+    def dequeue_message(self, is_error: bool = False) -> Optional[DiscordMessage]:
+        """Dequeues a message from the main queue and return it.
+
+        Returns None if the queue is empty.
         """
-        if not content and not embeds:
-            raise ValueError("Message must have content or embeds to be valid")
+        q = self._error_queue if is_error else self._main_queue
+        s = q.dequeue()
+        if not s:
+            return None
 
-        if embeds:
-            embeds_list = [obj.asdict() for obj in embeds]
-        else:
-            embeds_list = None
+        return DiscordMessage.from_json(s)
 
-        message = {}
-        if content:
-            message["content"] = content
-        if embeds_list:
-            message["embeds"] = embeds_list
-        if tts:
-            message["tts"] = tts
-        if username:
-            message["username"] = username
-        if avatar_url:
-            message["avatar_url"] = avatar_url
+    def messages_queued(self, is_error: bool = False) -> int:
+        """Returns how many message are currently in the queue."""
+        q = self._error_queue if is_error else self._main_queue
+        if not q:
+            return 0
 
-        return json.dumps(message, cls=JSONDateTimeEncoder)
+        return q.size()
 
-    def send_message_to_webhook(self, message_json: str) -> dhooks_lite.WebhookResponse:
-        """Send given message to webhook
+    def delete_queued_messages(self, is_error: bool = False) -> int:
+        """Deletes all messages in a queue and returns how many messages where deleted."""
+        q = self._error_queue if is_error else self._main_queue
+        if not q:
+            return 0
 
-        Params
-            message_json: Discord message encoded in JSON
-        """
+        return q.clear()
+
+    def send_message(self, message: DiscordMessage) -> dhooks_lite.WebhookResponse:
+        """Send a message to the webhook."""
         timeout = cache.ttl(self._blocked_cache_key())  # type: ignore
         if timeout:
             raise WebhookTooManyRequests(timeout)
 
-        message = json.loads(message_json, cls=JSONDateTimeDecoder)
-        if message.get("embeds"):
-            embeds = [
-                dhooks_lite.Embed.from_dict(embed_dict)
-                for embed_dict in message.get("embeds")
-            ]
-        else:
-            embeds = None
         hook = dhooks_lite.Webhook(
             url=self.url,
             user_agent=dhooks_lite.UserAgent(
@@ -205,16 +180,21 @@ class Webhook(models.Model):
             ),
         )
         response = hook.execute(
-            content=message.get("content"),
-            embeds=embeds,
-            username=message.get("username"),
-            avatar_url=message.get("avatar_url"),
+            content=message.content,
+            embeds=message.embeds,
+            username=message.username,
+            avatar_url=message.avatar_url,
             wait_for_response=True,
             max_retries=0,  # we will handle retries ourselves
         )
-        logger.debug("headers: %s", response.headers)
-        logger.debug("status_code: %s", response.status_code)
-        logger.debug("content: %s", response.content)
+        logger.debug(
+            "%s: Response from Discord for creating message from killmail %d: %s %s %s",
+            self,
+            message.killmail_id,
+            response.status_code,
+            response.headers,
+            response.content,
+        )
         if response.status_code == self.HTTP_TOO_MANY_REQUESTS:
             logger.error(
                 "%s: Received too many requests error from API: %s",
@@ -229,6 +209,7 @@ class Webhook(models.Model):
                 key=self._blocked_cache_key(), value="BLOCKED", timeout=retry_after
             )
             raise WebhookTooManyRequests(retry_after)
+
         return response
 
     def _blocked_cache_key(self) -> str:
