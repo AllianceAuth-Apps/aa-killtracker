@@ -27,7 +27,11 @@ from killtracker.app_settings import (
     KILLTRACKER_TASKS_TIMEOUT,
 )
 from killtracker.core import workers
-from killtracker.core.discord import DiscordMessage, HTTPError, WebhookTooManyRequests
+from killtracker.core.discord import (
+    DiscordMessage,
+    HTTPError,
+    WebhookRateLimitExhausted,
+)
 from killtracker.core.zkb import Killmail, KillmailDoesNotExist, ZKBTooManyRequestsError
 from killtracker.models import EveKillmail, Tracker, Webhook
 
@@ -36,7 +40,8 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 @shared_task(bind=True, base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)
 def run_killtracker(self: Task) -> int:
-    """Try to fetch new killmails from ZKB API and start trackers.
+    """Fetches and processes new killmails from ZKB API
+    and returns how many killmails were processed.
 
     This is the main periodic task for running Killtracker.
     """
@@ -203,7 +208,11 @@ def delete_stale_killmails() -> None:
     max_retries=None,
 )
 def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
-    """Sends all queued messages to given Webhook."""
+    """Sends queued messages to a webhook.
+
+    This task will retry after reaching an upper limit of sent messages
+    to prevent running potentially forever.
+    """
 
     webhook: Webhook = Webhook.objects.get(pk=webhook_pk)
     if not webhook.is_enabled:
@@ -212,6 +221,10 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
 
     sent_count = 0
     for _ in range(KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN):
+        if workers.is_shutting_down(self):
+            logger.debug("Aborting due to worker shutdown")
+            return
+
         message = webhook.dequeue_message()
         if not message:
             logger.debug("%s: No more messages to send for webhook", webhook)
@@ -220,7 +233,7 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
         try:
             message_id = webhook.send_message(message)
 
-        except WebhookTooManyRequests as ex:
+        except WebhookRateLimitExhausted as ex:
             webhook.enqueue_message(message)
             logger.warning(
                 "%s: Webhook temporarily blocked. Retrying at %s.", webhook, ex.retry_at
@@ -246,7 +259,10 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
         )
         sent_count += 1
 
-    logger.debug("Finished sending %d killmails to webhook", sent_count)
+    logger.debug("Finished task run for sending %d killmails to webhook", sent_count)
+
+    if webhook.messages_queued() > 0:
+        raise self.retry(countdown=1)
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)

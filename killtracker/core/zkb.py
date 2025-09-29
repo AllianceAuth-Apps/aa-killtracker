@@ -429,7 +429,7 @@ class Killmail(_KillmailBase):
             raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=False)
 
         key_last_request = "killtracker-zkb-last-request"
-        last_request = cache_get_timestamp(key_retry_at, now())
+        last_request = cache_get_timestamp(key_last_request, now())
         if last_request is not None:
             next_slot = last_request + dt.timedelta(
                 milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY

@@ -8,7 +8,7 @@ from app_utils.testing import NoSocketsTestCase
 from killtracker.core.discord import (
     DiscordMessage,
     HTTPError,
-    WebhookTooManyRequests,
+    WebhookRateLimitExhausted,
     send_message_to_webhook,
 )
 
@@ -116,7 +116,7 @@ class TestWebhookSendMessage(NoSocketsTestCase):
             },
         )
         # when/then
-        with self.assertRaises(WebhookTooManyRequests) as ctx:
+        with self.assertRaises(WebhookRateLimitExhausted) as ctx:
             send_message_to_webhook(name=self.name, url=self.url, message=self.message)
 
         self.assertTrue(ctx.exception.retry_at)
@@ -134,7 +134,7 @@ class TestWebhookSendMessage(NoSocketsTestCase):
             },
         )
         # when/then
-        with self.assertRaises(WebhookTooManyRequests) as ctx:
+        with self.assertRaises(WebhookRateLimitExhausted) as ctx:
             send_message_to_webhook(name=self.name, url=self.url, message=self.message)
 
         self.assertTrue(ctx.exception.retry_at)

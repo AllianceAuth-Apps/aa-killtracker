@@ -32,8 +32,8 @@ class HTTPError(Exception):
         self.status_code = status_code
 
 
-class WebhookTooManyRequests(Exception):
-    """Webhook is temporarily blocked."""
+class WebhookRateLimitExhausted(Exception):
+    """The rate limit of a webhook has been exhausted."""
 
     def __init__(self, retry_at: dt.datetime, is_original: bool = True):
         self.retry_at = retry_at
@@ -102,7 +102,7 @@ def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int
         key_retry_at, now() + dt.timedelta(seconds=_DEFAULT_429_TIMEOUT)
     )
     if retry_at is not None and retry_at > now():
-        raise WebhookTooManyRequests(retry_at=retry_at, is_original=False)
+        raise WebhookRateLimitExhausted(retry_at=retry_at, is_original=False)
 
     key_last_request = f"killtracker-webhook-last-request-{url}"
     last_request = cache_get_timestamp(key_last_request, now())
@@ -150,7 +150,7 @@ def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int
                 retry_after = _DEFAULT_429_TIMEOUT
             retry_at = now() + dt.timedelta(seconds=retry_after)
             cache_set_timestamp(key_retry_at, retry_at, timeout=retry_after + 60)
-            raise WebhookTooManyRequests(retry_at=retry_at, is_original=True)
+            raise WebhookRateLimitExhausted(retry_at=retry_at, is_original=True)
 
         raise HTTPError(response.status_code)
 

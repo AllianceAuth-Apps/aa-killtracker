@@ -113,6 +113,6 @@ KILLTRACKER_MAX_KILLMAILS_PER_RUN = clean_setting(
 """Maximum number of killmails retrieved from ZKB by task run."""
 
 KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN = clean_setting(
-    "KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN", default_value=30, min_value=1
+    "KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN", default_value=15, min_value=1
 )
 """Maximum number of messages sent to a Discord webhook by task run."""

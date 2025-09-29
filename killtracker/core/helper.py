@@ -32,4 +32,5 @@ def cache_get_timestamp(
 
 
 def cache_set_timestamp(key: str, ts: dt.datetime, timeout: int = 60):
+    """Sets a timestamp as cache value."""
     cache.set(key, ts.isoformat(), timeout=timeout)

@@ -7,7 +7,11 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils.timezone import now
 
-from killtracker.core.discord import DiscordMessage, HTTPError, WebhookTooManyRequests
+from killtracker.core.discord import (
+    DiscordMessage,
+    HTTPError,
+    WebhookRateLimitExhausted,
+)
 from killtracker.models import EveKillmail
 from killtracker.tasks import (
     ZKBTooManyRequestsError,
@@ -302,13 +306,15 @@ class TestGenerateKillmailMessage(TestTrackerBase):
 # @override_settings(CELERY_ALWAYS_EAGER=True)
 
 
+@patch(MODULE_PATH + ".workers.is_shutting_down", spec=True)
 @patch(MODULE_PATH + ".Webhook.send_message", spec=True)
 class TestSendMessagesToWebhook(TestTrackerBase):
     def setUp(self) -> None:
         cache.clear()
 
-    def test_should_send_one_message(self, mock_send_message):
+    def test_should_send_one_message(self, mock_send_message, mock_is_shutting_down):
         # given
+        mock_is_shutting_down.return_value = False
         mock_send_message.return_value = 42
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
@@ -318,9 +324,9 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         self.assertEqual(self.webhook_1._main_queue.size(), 0)
         self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
-    def test_three_message(self, mock_send_message):
-        """when three messages in queue, then sends them and returns 3"""
+    def test_should_send_three_messages(self, mock_send_message, mock_is_shutting_down):
         # given
+        mock_is_shutting_down.return_value = False
         mock_send_message.return_value = [1, 2, 3]
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
@@ -332,8 +338,11 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         self.assertEqual(self.webhook_1._main_queue.size(), 0)
         self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
-    def test_no_messages(self, mock_send_message):
-        """when no messages in queue, then do nothing"""
+    def test_should_do_nothing_when_queue_is_empty(
+        self, mock_send_message, mock_is_shutting_down
+    ):
+        # given
+        mock_is_shutting_down.return_value = False
         # when
         send_messages_to_webhook(self.webhook_1.pk)
         # then
@@ -341,9 +350,11 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         self.assertEqual(self.webhook_1._main_queue.size(), 0)
         self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
-    def test_failed_message(self, mock_send_message):
-        """when message sending failed, then put message in error queue"""
+    def test_should_put_failed_message_in_error_queue(
+        self, mock_send_message, mock_is_shutting_down
+    ):
         # given
+        mock_is_shutting_down.return_value = False
         mock_send_message.side_effect = HTTPError(404)
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
@@ -353,13 +364,41 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         self.assertEqual(self.webhook_1._main_queue.size(), 0)
         self.assertEqual(self.webhook_1._error_queue.size(), 1)
 
-    def test_retry_on_too_many_requests(self, mock_send_message):
-        """
-        when WebhookTooManyRequests exception is raised
-        then message is re-queued and retry once
-        """
+    def test_should_retry_on_too_many_requests_error(
+        self, mock_send_message, mock_is_shutting_down
+    ):
         # given
-        mock_send_message.side_effect = WebhookTooManyRequests(10)
+        mock_is_shutting_down.return_value = False
+        mock_send_message.side_effect = WebhookRateLimitExhausted(10)
+        self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
+        # when
+        with self.assertRaises(Retry):
+            send_messages_to_webhook(self.webhook_1.pk)
+        # then
+        self.assertEqual(mock_send_message.call_count, 1)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+
+    def test_should_abort_when_worker_is_shutting_down(
+        self, mock_send_message, mock_is_shutting_down
+    ):
+        # given
+        mock_is_shutting_down.return_value = True
+        mock_send_message.return_value = 42
+        self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
+        # when
+        send_messages_to_webhook(self.webhook_1.pk)
+        # then
+        self.assertEqual(mock_send_message.call_count, 0)
+        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+
+    @patch(MODULE_PATH + ".KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN", 1)
+    def test_retry_when_limit_is_reached(
+        self, mock_send_message, mock_is_shutting_down
+    ):
+        # given
+        mock_is_shutting_down.return_value = False
+        mock_send_message.return_value = [1, 2]
+        self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
         with self.assertRaises(Retry):
