@@ -32,7 +32,7 @@ from killtracker.app_settings import (
     KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
     KILLTRACKER_ZKB_REQUEST_DELAY,
 )
-from killtracker.exceptions import KillmailDoesNotExist
+from killtracker.core.helper import cache_get_timestamp, cache_set_timestamp
 from killtracker.providers import esi
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
@@ -55,6 +55,10 @@ class ZKBTooManyRequestsError(Exception):
     def __init__(self, retry_at: dt.datetime, is_original: bool = True):
         self.retry_at = retry_at
         self.is_original = is_original
+
+
+class KillmailDoesNotExist(Exception):
+    """Killmail does not exist in storage."""
 
 
 @dataclass
@@ -419,33 +423,20 @@ class Killmail(_KillmailBase):
         if "," in KILLTRACKER_QUEUE_ID:
             raise ImproperlyConfigured("A queue ID must not contains commas.")
 
-        key_retry_at = "killtracker-retry-at"
-        if (v := cache.get(key_retry_at)) is not None:
-            try:
-                retry_at = dt.datetime.fromisoformat(v)
-            except (TypeError, ValueError):
-                cache.delete(key_retry_at)
-                logger.warning("unable to parse timestamp of retry at")
-                return None
+        key_retry_at = "killtracker-zkb-retry-at"
+        retry_at = cache_get_timestamp(key_retry_at, now() + dt.timedelta(seconds=30))
+        if retry_at is not None and retry_at > now():
+            raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=False)
 
-            if retry_at > now():
-                raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=False)
-
-        key_last_request = "killtracker-last-request"
-        if (v := cache.get(key_last_request)) is not None:
-            try:
-                last_request = dt.datetime.fromisoformat(v)
-            except (TypeError, ValueError):
-                cache.delete(key_last_request)
-                logger.warning("unable to parse timestamp of last request")
-                last_request = now()
-
+        key_last_request = "killtracker-zkb-last-request"
+        last_request = cache_get_timestamp(key_retry_at, now())
+        if last_request is not None:
             next_slot = last_request + dt.timedelta(
                 milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY
             )
             seconds = (next_slot - now()).total_seconds()
             if seconds > 0:
-                logger.debug("Waiting %f seconds to for next free slot", seconds)
+                logger.debug("ZKB API: Waiting %f seconds for next free slot", seconds)
                 sleep(seconds)
 
         response = requests.get(
@@ -457,7 +448,9 @@ class Killmail(_KillmailBase):
             timeout=REQUESTS_TIMEOUT,
             headers={"User-Agent": USER_AGENT_TEXT},
         )
-        cache.set(key_last_request, dt.datetime.isoformat(now()), timeout=30)
+        cache_set_timestamp(
+            key_last_request, now(), timeout=KILLTRACKER_ZKB_REQUEST_DELAY + 30
+        )
         logger.debug(
             "Response from ZKB API: %d %s %s",
             response.status_code,
@@ -475,7 +468,7 @@ class Killmail(_KillmailBase):
                 except KeyError:
                     retry_after = DEFAULT_429_TIMEOUT
                 retry_at = now() + dt.timedelta(seconds=retry_after)
-                cache.set(key_retry_at, retry_at.isoformat(), timeout=retry_after + 60)
+                cache_set_timestamp(key_retry_at, retry_at, timeout=retry_after + 60)
                 raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=True)
 
             return None

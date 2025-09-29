@@ -22,8 +22,7 @@ from app_utils.urls import static_file_absolute_url
 from app_utils.views import humanize_value
 
 from killtracker import __title__
-
-from .killmails import ZKB_KILLMAIL_BASEURL, Killmail, TrackerInfo
+from killtracker.core.killmails import ZKB_KILLMAIL_BASEURL, Killmail, TrackerInfo
 
 if TYPE_CHECKING:
     from killtracker.models import Tracker

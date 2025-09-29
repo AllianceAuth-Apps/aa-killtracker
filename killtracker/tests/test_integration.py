@@ -20,7 +20,7 @@ PACKAGE_PATH = "killtracker"
 @override_settings(CELERY_ALWAYS_EAGER=True)
 @patch(PACKAGE_PATH + ".core.killmails.KILLTRACKER_QUEUE_ID", "dummy")
 @patch(PACKAGE_PATH + ".tasks.is_esi_online", lambda: True)
-@patch(PACKAGE_PATH + ".models.webhooks.dhooks_lite.Webhook.execute", spec=True)
+@patch(PACKAGE_PATH + ".core.webhooks.dhooks_lite.Webhook.execute", spec=True)
 @requests_mock.Mocker()
 class TestTasksEnd2End(LoadTestDataMixin, TestCase):
     @classmethod

@@ -1,16 +1,14 @@
 import datetime as dt
 from unittest.mock import patch
 
-import celery
-import dhooks_lite
+from celery.exceptions import Retry
 
 from django.core.cache import cache
 from django.test import TestCase
-from django.test.utils import override_settings
 from django.utils.timezone import now
 
 from killtracker.core.discord_messages import DiscordMessage
-from killtracker.exceptions import WebhookTooManyRequests
+from killtracker.core.webhooks import HTTPError, WebhookTooManyRequests
 from killtracker.models import EveKillmail
 from killtracker.tasks import (
     ZKBTooManyRequestsError,
@@ -19,7 +17,6 @@ from killtracker.tasks import (
     run_killtracker,
     run_tracker,
     send_messages_to_webhook,
-    send_test_message_to_webhook,
     store_killmail,
 )
 
@@ -177,7 +174,7 @@ class TestRunKilltracker(TestTrackerBase):
         )
         mock_is_esi_online.return_value = True
         # when/then
-        with self.assertRaises(celery.exceptions.Retry):
+        with self.assertRaises(Retry):
             run_killtracker()
         # then
         self.assertEqual(mock_run_tracker.delay.call_count, 0)
@@ -302,8 +299,10 @@ class TestGenerateKillmailMessage(TestTrackerBase):
         self.assertEqual(mock_retry.call_count, 4)
 
 
-@patch("celery.app.task.Context.called_directly", False)  # make retry work with eager
-@override_settings(CELERY_ALWAYS_EAGER=True)
+# @patch("celery.app.task.Context.called_directly", False)  # make retry work with eager
+# @override_settings(CELERY_ALWAYS_EAGER=True)
+
+
 @patch(MODULE_PATH + ".Webhook.send_message", spec=True)
 class TestSendMessagesToWebhook(TestTrackerBase):
     def setUp(self) -> None:
@@ -311,12 +310,10 @@ class TestSendMessagesToWebhook(TestTrackerBase):
 
     def test_should_send_one_message(self, mock_send_message):
         # given
-        mock_send_message.return_value = dhooks_lite.WebhookResponse(
-            {}, status_code=200
-        )
+        mock_send_message.return_value = 42
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
-        send_messages_to_webhook.delay(self.webhook_1.pk)
+        send_messages_to_webhook(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 1)
         self.assertEqual(self.webhook_1._main_queue.size(), 0)
@@ -325,14 +322,12 @@ class TestSendMessagesToWebhook(TestTrackerBase):
     def test_three_message(self, mock_send_message):
         """when three messages in queue, then sends them and returns 3"""
         # given
-        mock_send_message.return_value = dhooks_lite.WebhookResponse(
-            {}, status_code=200
-        )
+        mock_send_message.return_value = [1, 2, 3]
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
-        send_messages_to_webhook.delay(self.webhook_1.pk)
+        send_messages_to_webhook(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 3)
         self.assertEqual(self.webhook_1._main_queue.size(), 0)
@@ -340,12 +335,8 @@ class TestSendMessagesToWebhook(TestTrackerBase):
 
     def test_no_messages(self, mock_send_message):
         """when no messages in queue, then do nothing"""
-        # given
-        mock_send_message.return_value = dhooks_lite.WebhookResponse(
-            {}, status_code=200
-        )
         # when
-        send_messages_to_webhook.delay(self.webhook_1.pk)
+        send_messages_to_webhook(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 0)
         self.assertEqual(self.webhook_1._main_queue.size(), 0)
@@ -354,18 +345,16 @@ class TestSendMessagesToWebhook(TestTrackerBase):
     def test_failed_message(self, mock_send_message):
         """when message sending failed, then put message in error queue"""
         # given
-        mock_send_message.return_value = dhooks_lite.WebhookResponse(
-            {}, status_code=404
-        )
+        mock_send_message.side_effect = HTTPError(404)
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
-        send_messages_to_webhook.delay(self.webhook_1.pk)
+        send_messages_to_webhook(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 1)
         self.assertEqual(self.webhook_1._main_queue.size(), 0)
         self.assertEqual(self.webhook_1._error_queue.size(), 1)
 
-    def test_abort_on_too_many_requests(self, mock_send_message):
+    def test_retry_on_too_many_requests(self, mock_send_message):
         """
         when WebhookTooManyRequests exception is raised
         then message is re-queued and retry once
@@ -374,7 +363,8 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         mock_send_message.side_effect = WebhookTooManyRequests(10)
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
-        send_messages_to_webhook.delay(self.webhook_1.pk)
+        with self.assertRaises(Retry):
+            send_messages_to_webhook(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 1)
         self.assertEqual(self.webhook_1._main_queue.size(), 1)
@@ -404,24 +394,6 @@ class TestStoreKillmail(TestTrackerBase):
         store_killmail(killmail.id)
         # then
         self.assertTrue(mock_logger.warning.called)
-
-
-@override_settings(CELERY_ALWAYS_EAGER=True, CELERY_EAGER_PROPAGATES_EXCEPTIONS=True)
-@patch("killtracker.models.webhooks.dhooks_lite.Webhook.execute", spec=True)
-@patch(MODULE_PATH + ".logger", spec=True)
-class TestSendTestKillmailsToWebhook(TestTrackerBase):
-    def setUp(self) -> None:
-        self.webhook_1._main_queue.clear()
-
-    def test_run_normal(self, mock_logger, mock_execute):
-        # given
-        mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
-        # when
-        with self.assertRaises(celery.exceptions.Retry):
-            send_test_message_to_webhook.delay(self.webhook_1.pk)
-        # then
-        self.assertTrue(mock_execute.called)
-        self.assertFalse(mock_logger.error.called)
 
 
 @patch(MODULE_PATH + ".EveKillmail.objects.delete_stale")
