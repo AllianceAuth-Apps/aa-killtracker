@@ -1,3 +1,5 @@
+"""A module with helpers for the core package."""
+
 import datetime as dt
 from typing import Optional
 

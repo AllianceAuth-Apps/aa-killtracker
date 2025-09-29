@@ -26,14 +26,9 @@ from killtracker.app_settings import (
     KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     KILLTRACKER_TASKS_TIMEOUT,
 )
-from killtracker.core import worker_shutdown
-from killtracker.core.discord_messages import DiscordMessage
-from killtracker.core.killmails import (
-    Killmail,
-    KillmailDoesNotExist,
-    ZKBTooManyRequestsError,
-)
-from killtracker.core.webhooks import HTTPError, WebhookTooManyRequests
+from killtracker.core import workers
+from killtracker.core.discord import DiscordMessage, HTTPError, WebhookTooManyRequests
+from killtracker.core.zkb import Killmail, KillmailDoesNotExist, ZKBTooManyRequestsError
 from killtracker.models import EveKillmail, Tracker, Webhook
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
@@ -63,7 +58,7 @@ def run_killtracker(self: Task) -> int:
         if is_timed_out():
             break
 
-        if worker_shutdown.is_shutting_down(self):
+        if workers.is_shutting_down(self):
             logger.debug("Aborting due to worker shutdown")
             break
 

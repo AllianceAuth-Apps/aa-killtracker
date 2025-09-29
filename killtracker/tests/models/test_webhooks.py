@@ -1,6 +1,6 @@
 from django.test import TestCase
 
-from killtracker.core.discord_messages import DiscordMessage
+from killtracker.core.discord import DiscordMessage
 from killtracker.models import Webhook
 
 

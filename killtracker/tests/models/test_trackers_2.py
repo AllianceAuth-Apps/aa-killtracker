@@ -8,8 +8,8 @@ from eveuniverse.models import EveConstellation, EveRegion, EveSolarSystem, EveT
 
 from app_utils.testing import NoSocketsTestCase
 
-from killtracker.core.discord_messages import DiscordMessage
-from killtracker.core.killmails import Killmail
+from killtracker.core.discord import DiscordMessage
+from killtracker.core.zkb import Killmail
 from killtracker.tests.testdata.factories import TrackerFactory
 from killtracker.tests.testdata.helpers import LoadTestDataMixin, load_killmail
 

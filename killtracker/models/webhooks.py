@@ -14,8 +14,7 @@ from app_utils.urls import static_file_absolute_url
 
 from killtracker import __title__
 from killtracker.app_settings import KILLTRACKER_WEBHOOK_SET_AVATAR
-from killtracker.core.discord_messages import DiscordMessage
-from killtracker.core.webhooks import send_message_to_webhook
+from killtracker.core.discord import DiscordMessage, send_message_to_webhook
 from killtracker.managers import WebhookManager
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)

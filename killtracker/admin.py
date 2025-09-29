@@ -12,7 +12,7 @@ from django.utils.safestring import mark_safe
 from allianceauth import NAME as site_header
 
 from killtracker import tasks
-from killtracker.core.killmails import Killmail
+from killtracker.core.zkb import Killmail
 from killtracker.forms import (
     TrackerAdminForm,
     TrackerAdminKillmailIdForm,

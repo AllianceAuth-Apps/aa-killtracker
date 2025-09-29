@@ -13,7 +13,7 @@ from django.utils.timezone import now
 from app_utils.esi_testing import BravadoOperationStub
 from app_utils.testing import NoSocketsTestCase
 
-from killtracker.core.killmails import (
+from killtracker.core.zkb import (
     ZKB_API_URL,
     ZKB_REDISQ_URL,
     Killmail,
@@ -25,7 +25,7 @@ from killtracker.tests import CacheStub
 from killtracker.tests.testdata.factories import KillmailFactory
 from killtracker.tests.testdata.helpers import killmails_data, load_killmail
 
-MODULE_PATH = "killtracker.core.killmails"
+MODULE_PATH = "killtracker.core.zkb"
 unittest.util._MAX_LENGTH = 1000
 requests_mock.mock.case_sensitive = True
 

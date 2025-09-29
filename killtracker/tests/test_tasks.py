@@ -7,8 +7,7 @@ from django.core.cache import cache
 from django.test import TestCase
 from django.utils.timezone import now
 
-from killtracker.core.discord_messages import DiscordMessage
-from killtracker.core.webhooks import HTTPError, WebhookTooManyRequests
+from killtracker.core.discord import DiscordMessage, HTTPError, WebhookTooManyRequests
 from killtracker.models import EveKillmail
 from killtracker.tasks import (
     ZKBTooManyRequestsError,
@@ -50,7 +49,7 @@ class TestTrackerBase(LoadTestDataMixin, TestCase):
         )
 
 
-@patch(MODULE_PATH + ".worker_shutdown.is_shutting_down", spec=True)
+@patch(MODULE_PATH + ".workers.is_shutting_down", spec=True)
 @patch(MODULE_PATH + ".is_esi_online", spec=True)
 @patch(MODULE_PATH + ".delete_stale_killmails", spec=True)
 @patch(MODULE_PATH + ".store_killmail", spec=True)

@@ -2,9 +2,9 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from killtracker.core.worker_shutdown import is_shutting_down
+from killtracker.core.workers import is_shutting_down
 
-MODULE_PATH = "killtracker.core.worker_shutdown"
+MODULE_PATH = "killtracker.core.workers"
 
 
 class FakeTask:

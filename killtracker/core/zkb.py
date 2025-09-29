@@ -1,4 +1,4 @@
-"""Fetching killmails from ZKB."""
+"""Fetch killmails from zKillboard."""
 
 # pylint: disable = redefined-builtin
 

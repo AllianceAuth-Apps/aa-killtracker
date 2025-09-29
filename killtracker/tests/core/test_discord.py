@@ -1,22 +1,53 @@
 from unittest.mock import patch
 
+import dhooks_lite
 import requests_mock
 
-from django.test import TestCase
+from app_utils.testing import NoSocketsTestCase
 
-from killtracker.core.discord_messages import DiscordMessage
-from killtracker.core.webhooks import (
+from killtracker.core.discord import (
+    DiscordMessage,
     HTTPError,
     WebhookTooManyRequests,
     send_message_to_webhook,
 )
 
-MODULE_PATH = "killtracker.core.webhooks"
+MODULE_PATH = "killtracker.core.discord"
+
+
+class TestDiscordMessage(NoSocketsTestCase):
+    def test_can_create(self):
+        o = DiscordMessage(content="content")
+        self.assertEqual(o.content, "content")
+
+    def test_should_raise_exception_when_invalid(self):
+        with self.assertRaises(ValueError):
+            DiscordMessage(username="user")
+
+    def test_can_convert_to_and_from_json_1(self):
+        o1 = DiscordMessage(
+            content="content",
+        )
+        s = o1.to_json()
+        o2 = DiscordMessage.from_json(s)
+        self.assertEqual(o1, o2)
+
+    def test_can_convert_to_and_from_json_2(self):
+        o1 = DiscordMessage(
+            avatar_url="avatar_url",
+            content="content",
+            embeds=[dhooks_lite.Embed(description="description")],
+            killmail_id=42,
+            username="username",
+        )
+        s = o1.to_json()
+        o2 = DiscordMessage.from_json(s)
+        self.assertEqual(o1, o2)
 
 
 @requests_mock.Mocker()
 @patch(MODULE_PATH + ".cache_get_timestamp")
-class TestWebhookSendMessage(TestCase):
+class TestWebhookSendMessage(NoSocketsTestCase):
     def setUp(self) -> None:
         self.name = "webhook"
         self.message = DiscordMessage(content="Test message")

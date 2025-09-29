@@ -1,14 +1,12 @@
-"""This module allows to create Discord messages from killmails."""
+"""Generate Discord messages from tracked killmails."""
 
 from __future__ import annotations
 
-import json
-from copy import copy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 import dhooks_lite
-from requests.exceptions import HTTPError
+import requests
 
 from eveuniverse.helpers import EveEntityNameResolver
 from eveuniverse.models import EveEntity, EveSolarSystem
@@ -16,88 +14,32 @@ from eveuniverse.models import EveEntity, EveSolarSystem
 from allianceauth.eveonline.evelinks import dotlan, eveimageserver, zkillboard
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.django import app_labels
-from app_utils.json import JSONDateTimeDecoder, JSONDateTimeEncoder
 from app_utils.logging import LoggerAddTag
 from app_utils.urls import static_file_absolute_url
 from app_utils.views import humanize_value
 
 from killtracker import __title__
-from killtracker.core.killmails import ZKB_KILLMAIL_BASEURL, Killmail, TrackerInfo
+from killtracker.core.discord import DiscordMessage
+from killtracker.core.zkb import ZKB_KILLMAIL_BASEURL, Killmail, TrackerInfo
 
 if TYPE_CHECKING:
     from killtracker.models import Tracker
 
-
 _ICON_SIZE = 128
-
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-@dataclass
-class DiscordMessage:
-    """A Discord message created from a Killmail."""
-
-    avatar_url: Optional[str] = None
-    content: Optional[str] = None
-    embeds: Optional[List[dhooks_lite.Embed]] = None
-    killmail_id: int = 0  # Killmail ID this message from created from
-    tts: Optional[bool] = None
-    username: Optional[str] = None
-
-    def __post_init__(self):
-        if not self.content and not self.embeds:
-            raise ValueError("Message must have content or embeds to be valid")
-
-    def to_json(self) -> str:
-        """Converts a Discord message into a JSON object and returns it."""
-
-        if self.embeds:
-            embeds_list = [obj.asdict() for obj in self.embeds]
-        else:
-            embeds_list = None
-
-        message = {}
-        if self.killmail_id:
-            message["killmail_id"] = self.killmail_id
-        if self.content:
-            message["content"] = self.content
-        if embeds_list:
-            message["embeds"] = embeds_list
-        if self.tts:
-            message["tts"] = self.tts
-        if self.username:
-            message["username"] = self.username
-        if self.avatar_url:
-            message["avatar_url"] = self.avatar_url
-
-        return json.dumps(message, cls=JSONDateTimeEncoder)
-
-    @classmethod
-    def from_json(cls, s: str) -> "DiscordMessage":
-        """Creates a DiscordMessage object from an JSON object and returns it."""
-        message1: dict = json.loads(s, cls=JSONDateTimeDecoder)
-        message2 = copy(message1)
-        if message1.get("embeds"):
-            message2["embeds"] = [
-                dhooks_lite.Embed.from_dict(embed_dict)
-                for embed_dict in message1.get("embeds")
-            ]
-        else:
-            message2["embeds"] = None
-        return cls(**message2)
-
-    @classmethod
-    def from_killmail(
-        cls, tracker: Tracker, killmail: Killmail, intro_text: Optional[str] = None
-    ) -> "DiscordMessage":
-        """Creates a DiscordMessage object from a Killmail and returns it."""
-        m = DiscordMessage(
-            killmail_id=killmail.id,
-            content=_create_content(tracker, intro_text),
-            embeds=[_create_embed(tracker, killmail)],
-        )
-        return m
+def create_discord_message_from_killmail(
+    tracker: Tracker, killmail: Killmail, intro_text: Optional[str] = None
+) -> "DiscordMessage":
+    """Creates a Discord message from a Killmail and returns it."""
+    m = DiscordMessage(
+        killmail_id=killmail.id,
+        content=_create_content(tracker, intro_text),
+        embeds=[_create_embed(tracker, killmail)],
+    )
+    return m
 
 
 @dataclass(frozen=True)
@@ -153,7 +95,7 @@ def _create_content(tracker: Tracker, intro_text: Optional[str] = None) -> str:
             for group in tracker.ping_groups.all():
                 try:
                     role = DiscordUser.objects.group_to_role(group)  # type: ignore
-                except HTTPError:
+                except requests.exceptions.HTTPError:
                     logger.warning(
                         "Failed to get Discord roles. Can not ping groups.",
                         exc_info=True,
