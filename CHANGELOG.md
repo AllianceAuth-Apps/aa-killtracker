@@ -7,11 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [0.18.0] - TBD
+## [1.0.0] - TBD
 
 ### Changed
 
-- Logic for fetching killmails from ZKB overhauled to work better with new API rate limit
+- BREAKING CHANGE: Support dropped for AA3
+- Logic for fetching killmails from ZKB improved
+- Logic for sending messages to Discord improved
 - Improved log messages
 - Refactored discord messages and Webhook API
 

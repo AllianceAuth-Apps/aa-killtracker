@@ -30,32 +30,25 @@ pylint:
     script:
         - tox -e pylint
 
-test-38-django40:
+test-38-django42:
     extends: .tox_setup
     image: python:3.8-bookworm
     script:
-        - tox -e py38-django40
+        - tox -e py38-django42
         - bash <(curl -s https://codecov.io/bash)
 
-test-39-django40:
+test-39-django42:
     extends: .tox_setup
     image: python:3.9-bookworm
     script:
-        - tox -e py39-django40
+        - tox -e py39-django42
         - bash <(curl -s https://codecov.io/bash)
 
-test-310-django40:
+test-310-django42:
     extends: .tox_setup
     image: python:3.10-bookworm
     script:
-        - tox -e py310-django40
-        - bash <(curl -s https://codecov.io/bash)
-
-test-311-django40:
-    extends: .tox_setup
-    image: python:3.11-bookworm
-    script:
-        - tox -e py311-django40
+        - tox -e py310-django42
         - bash <(curl -s https://codecov.io/bash)
 
 test-311-django42:
@@ -63,6 +56,13 @@ test-311-django42:
     image: python:3.11-bookworm
     script:
         - tox -e py311-django42
+        - bash <(curl -s https://codecov.io/bash)
+
+test-312-django42:
+    extends: .tox_setup
+    image: python:3.12-bookworm
+    script:
+        - tox -e py312-django42
         - bash <(curl -s https://codecov.io/bash)
 
 deploy-pypi:
