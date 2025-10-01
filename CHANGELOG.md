@@ -7,15 +7,29 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [1.0.0] - TBD
+## [1.0.0a1] - 2025-10-01
 
 ### Changed
 
 - BREAKING CHANGE: Support dropped for AA3
-- Logic for fetching killmails from ZKB improved
-- Logic for sending messages to Discord improved
+- Logic for sending messages to Discord overhauled to reduce retries
+- Updated dependencies
+
+### Fixed
+
+- Occasional temporary suspensions from Discord with 429 / Too Many Requests error
+
+## [0.18.0a1] - 2025-09-27
+
+### Changed
+
+- Logic for fetching killmails from ZKB overhauled to reduce retries
 - Improved log messages
 - Refactored discord messages and Webhook API
+
+### Fixed
+
+- Occasional temporary suspensions from ZKB with 429 / Too Many Requests error
 
 ## [0.17.0] - 2025-09-23
 
