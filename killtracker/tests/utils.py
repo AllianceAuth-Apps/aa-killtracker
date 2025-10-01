@@ -26,19 +26,19 @@ class CacheFake:
     def clear(self) -> None:
         self._cache.clear()
 
-    def delete(self, key: str, version: int | None = ...) -> None:
+    def delete(self, key: str, version: int = None) -> None:
         try:
             del self._cache[key]
         except KeyError:
             pass
 
-    def get(self, key: str, default: Any = None, version: int | None = ...) -> Any:
+    def get(self, key: str, default: Any = None, version: int = None) -> Any:
         try:
             return self._cache[key]
         except KeyError:
             return default
 
     def set(
-        self, key: str, value: Any, timeout: int | None = ..., version: int | None = ...
+        self, key: str, value: Any, timeout: int = None, version: int = None
     ) -> None:
         self._cache[key] = value
