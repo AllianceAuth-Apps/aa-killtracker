@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 import requests_mock
 
-from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase
 from django.utils.dateparse import parse_datetime
@@ -24,6 +23,7 @@ from killtracker.core.zkb import (
 from killtracker.tests import CacheStub
 from killtracker.tests.testdata.factories import KillmailFactory
 from killtracker.tests.testdata.helpers import killmails_data, load_killmail
+from killtracker.tests.utils import CacheFake
 
 MODULE_PATH = "killtracker.core.zkb"
 unittest.util._MAX_LENGTH = 1000
@@ -405,11 +405,9 @@ class TestCreateFromZkbApi(NoSocketsTestCase):
         self.assertFalse(killmail.zkb.is_awox)
 
 
+@patch(MODULE_PATH + ".cache", new_callable=CacheFake)
 class TestKillmailStorage(TestCase):
-    def setUp(self) -> None:
-        cache.clear()
-
-    def test_should_store_and_retrieve_killmail(self):
+    def test_should_store_and_retrieve_killmail(self, mock_cache):
         # given
         killmail_1 = KillmailFactory()
         # when
@@ -418,12 +416,12 @@ class TestKillmailStorage(TestCase):
         # then
         self.assertEqual(killmail_1, killmail_2)
 
-    def test_should_raise_error_when_killmail_does_not_exist(self):
+    def test_should_raise_error_when_killmail_does_not_exist(self, mock_cache):
         # when/then
         with self.assertRaises(KillmailDoesNotExist):
             Killmail.get(id=99)
 
-    def test_should_delete_killmail(self):
+    def test_should_delete_killmail(self, mock_cache):
         # given
         killmail = KillmailFactory()
         killmail.save()
@@ -433,7 +431,7 @@ class TestKillmailStorage(TestCase):
         with self.assertRaises(KillmailDoesNotExist):
             Killmail.get(id=killmail.id)
 
-    def test_should_override_existing_killmail(self):
+    def test_should_override_existing_killmail(self, mock_cache):
         # given
         killmail_1 = KillmailFactory(zkb__points=1)
         killmail_1.save()

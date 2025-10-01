@@ -14,7 +14,7 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
 def cache_get_timestamp(
-    key: str, fallback: Optional[dt.datetime]
+    key: str, fallback: Optional[dt.datetime] = None
 ) -> Optional[dt.datetime]:
     """Returns a timestamp from cache when it exists
     or None when it does not exist

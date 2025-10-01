@@ -32,7 +32,7 @@ from killtracker.app_settings import (
     KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
     KILLTRACKER_ZKB_REQUEST_DELAY,
 )
-from killtracker.core.helper import cache_get_timestamp, cache_set_timestamp
+from killtracker.core.helpers import cache_get_timestamp, cache_set_timestamp
 from killtracker.providers import esi
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)

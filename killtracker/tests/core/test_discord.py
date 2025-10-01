@@ -1,7 +1,10 @@
+import datetime as dt
 from unittest.mock import patch
 
 import dhooks_lite
 import requests_mock
+
+from django.utils.timezone import now
 
 from app_utils.testing import NoSocketsTestCase
 
@@ -9,10 +12,10 @@ from killtracker.core.discord import (
     DiscordMessage,
     HTTPError,
     WebhookRateLimitExhausted,
+    _make_key_retry_at,
     send_message_to_webhook,
 )
-
-MODULE_PATH = "killtracker.core.discord"
+from killtracker.tests.utils import CacheFake
 
 
 class TestDiscordMessage(NoSocketsTestCase):
@@ -46,16 +49,15 @@ class TestDiscordMessage(NoSocketsTestCase):
 
 
 @requests_mock.Mocker()
-@patch(MODULE_PATH + ".cache_get_timestamp")
+@patch("killtracker.core.helpers.cache", new_callable=CacheFake)
 class TestWebhookSendMessage(NoSocketsTestCase):
     def setUp(self) -> None:
         self.name = "webhook"
         self.message = DiscordMessage(content="Test message")
         self.url = "https://webhook.example.com/1234"
 
-    def test_when_send_ok_returns_true(self, requests_mocker, mock_cache_get):
+    def test_when_send_ok_returns_true(self, requests_mocker, mock_cache):
         # given
-        mock_cache_get.return_value = None
         requests_mocker.register_uri(
             "POST",
             self.url,
@@ -86,9 +88,8 @@ class TestWebhookSendMessage(NoSocketsTestCase):
         self.assertEqual(got, 223704706495545344)
         self.assertTrue(requests_mocker.called)
 
-    def test_when_send_not_ok_raise_error(self, requests_mocker, mock_cache_get):
+    def test_when_send_not_ok_raise_error(self, requests_mocker, mock_cache):
         # given
-        mock_cache_get.return_value = None
         requests_mocker.register_uri("POST", self.url, status_code=404)
         # when
         with self.assertRaises(HTTPError) as ctx:
@@ -97,9 +98,10 @@ class TestWebhookSendMessage(NoSocketsTestCase):
         self.assertEqual(ctx.exception.status_code, 404)
         self.assertTrue(requests_mocker.called)
 
-    def test_too_many_requests_normal(self, requests_mocker, mock_cache_get):
+    def test_raise_too_many_requests_when_received_from_api(
+        self, requests_mocker, mock_cache
+    ):
         # given
-        mock_cache_get.return_value = None
         requests_mocker.register_uri(
             "POST",
             self.url,
@@ -121,9 +123,8 @@ class TestWebhookSendMessage(NoSocketsTestCase):
 
         self.assertTrue(ctx.exception.retry_at)
 
-    def test_too_many_requests_no_retry_value(self, requests_mocker, mock_cache_get):
+    def test_too_many_requests_no_retry_value(self, requests_mocker, mock_cache):
         # given
-        mock_cache_get.return_value = None
         requests_mocker.register_uri(
             "POST",
             self.url,
@@ -137,4 +138,16 @@ class TestWebhookSendMessage(NoSocketsTestCase):
         with self.assertRaises(WebhookRateLimitExhausted) as ctx:
             send_message_to_webhook(name=self.name, url=self.url, message=self.message)
 
+        self.assertTrue(ctx.exception.retry_at)
+
+    def test_should_reraise_exception_when_not_expired(
+        self, requests_mocker, mock_cache
+    ):
+        # given
+        key = _make_key_retry_at(self.url)
+        mock_cache.set(key, now() + dt.timedelta(hours=1))
+        # when
+        with self.assertRaises(WebhookRateLimitExhausted) as ctx:
+            send_message_to_webhook(name=self.name, url=self.url, message=self.message)
+        # then
         self.assertTrue(ctx.exception.retry_at)

@@ -18,7 +18,7 @@ from app_utils.logging import LoggerAddTag
 
 from killtracker import APP_NAME, HOMEPAGE_URL, __title__, __version__
 from killtracker.app_settings import KILLTRACKER_DISCORD_SEND_DELAY
-from killtracker.core.helper import cache_get_timestamp, cache_set_timestamp
+from killtracker.core.helpers import cache_get_timestamp, cache_set_timestamp
 
 _DEFAULT_429_TIMEOUT = 600
 
@@ -48,7 +48,6 @@ class DiscordMessage:
     content: Optional[str] = None
     embeds: Optional[List[dhooks_lite.Embed]] = None
     killmail_id: int = 0  # Killmail ID this message from created from
-    tts: Optional[bool] = None
     username: Optional[str] = None
 
     def __post_init__(self):
@@ -70,8 +69,6 @@ class DiscordMessage:
             message["content"] = self.content
         if embeds_list:
             message["embeds"] = embeds_list
-        if self.tts:
-            message["tts"] = self.tts
         if self.username:
             message["username"] = self.username
         if self.avatar_url:
@@ -97,7 +94,7 @@ class DiscordMessage:
 def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int:
     """Send a message to a Discord webhook and returns the ID of new message."""
 
-    key_retry_at = f"killtracker-webhook-retry-at-{url}"
+    key_retry_at = _make_key_retry_at(url)
     retry_at = cache_get_timestamp(
         key_retry_at, now() + dt.timedelta(seconds=_DEFAULT_429_TIMEOUT)
     )
@@ -160,3 +157,7 @@ def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int
         message_id = 0
 
     return message_id
+
+
+def _make_key_retry_at(url):
+    return f"killtracker-webhook-retry-at-{url}"
