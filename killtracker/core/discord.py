@@ -19,6 +19,7 @@ from app_utils.logging import LoggerAddTag
 
 from killtracker import APP_NAME, HOMEPAGE_URL, __title__, __version__
 from killtracker.app_settings import KILLTRACKER_DISCORD_SEND_DELAY
+from killtracker.core.helpers import datetime_or_none
 
 _DEFAULT_429_TIMEOUT = 600
 
@@ -95,12 +96,12 @@ def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int
     """Send a message to a Discord webhook and returns the ID of new message."""
 
     key_retry_at = _make_key_retry_at(url)
-    retry_at = cache.get(key_retry_at)
+    retry_at = datetime_or_none(cache.get(key_retry_at))
     if retry_at is not None and retry_at > now():
         raise WebhookRateLimitExhausted(retry_at=retry_at, is_original=False)
 
     key_last_request = _make_key_last_request(url)
-    last_request = cache.get(key_last_request)
+    last_request = datetime_or_none(cache.get(key_last_request))
     if last_request is not None:
         next_slot = last_request + dt.timedelta(seconds=KILLTRACKER_DISCORD_SEND_DELAY)
         seconds = (next_slot - now()).total_seconds()

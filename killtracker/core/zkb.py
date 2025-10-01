@@ -32,6 +32,7 @@ from killtracker.app_settings import (
     KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
     KILLTRACKER_ZKB_REQUEST_DELAY,
 )
+from killtracker.core.helpers import datetime_or_none
 from killtracker.providers import esi
 
 ZKB_KILLMAIL_BASEURL = "https://zkillboard.com/kill/"
@@ -425,11 +426,11 @@ class Killmail(_KillmailBase):
         if "," in KILLTRACKER_QUEUE_ID:
             raise ImproperlyConfigured("A queue ID must not contains commas.")
 
-        retry_at = cache.get(_KEY_RETRY_AT)
+        retry_at = datetime_or_none(cache.get(_KEY_RETRY_AT))
         if retry_at is not None and retry_at > now():
             raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=False)
 
-        last_request = cache.get(_KEY_LAST_REQUEST)
+        last_request = datetime_or_none(cache.get(_KEY_LAST_REQUEST))
         if last_request is not None:
             next_slot = last_request + dt.timedelta(
                 milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY

@@ -89,6 +89,34 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         self.assertIsNone(killmail)
 
     @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
+    def test_should_ignore_invalid_value_for_retry_at_key(
+        self, requests_mocker, mock_cache
+    ):
+        # given
+        mock_cache.set(_KEY_RETRY_AT, "abc")
+        requests_mocker.register_uri(
+            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when
+        killmail = Killmail.create_from_zkb_redisq()
+        # then
+        self.assertIsNone(killmail)
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
+    def test_should_ignore_invalid_value_for_last_request_key(
+        self, requests_mocker, mock_cache
+    ):
+        # given
+        mock_cache.set(_KEY_LAST_REQUEST, "abc")
+        requests_mocker.register_uri(
+            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
+        )
+        # when
+        killmail = Killmail.create_from_zkb_redisq()
+        # then
+        self.assertIsNone(killmail)
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_handle_zkb_data_has_no_solar_system(
         self, requests_mocker, mock_cache
     ):
