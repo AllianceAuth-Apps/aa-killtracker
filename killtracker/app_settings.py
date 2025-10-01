@@ -13,13 +13,8 @@ sometimes killmails appear belated on ZKB,
 this feature ensures they don't create new alerts.
 """
 
-KILLTRACKER_MAX_KILLMAILS_PER_RUN = clean_setting(
-    "KILLTRACKER_MAX_KILLMAILS_PER_RUN", 500
-)
-"""Maximum number of killmails retrieved from ZKB by task run."""
-
 KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS = clean_setting(
-    "KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS", 30
+    "KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS", default_value=30, min_value=0
 )
 """Killmails older than set number of days will be purged from the database.
 If you want to keep all killmails set this to 0.
@@ -103,9 +98,21 @@ KILLTRACKER_STORAGE_KILLMAILS_LIFETIME = clean_setting(
 )
 """Max lifetime of killmails in temporary storage in seconds."""
 
-KILLTRACKER_ZKB_REQUEST_DELAY = clean_setting("KILLTRACKER_ZKB_REQUEST_DELAY", 500)
+KILLTRACKER_ZKB_REQUEST_DELAY = clean_setting(
+    "KILLTRACKER_ZKB_REQUEST_DELAY", default_value=500, min_value=500
+)
 """Delay between subsequent calls to ZKB API in milliseconds.
 
 This delay ensures the app does not breach the CloudFlare rate limit of currently
 two (2) requests per second per IP address.
 """
+
+KILLTRACKER_MAX_KILLMAILS_PER_RUN = clean_setting(
+    "KILLTRACKER_MAX_KILLMAILS_PER_RUN", default_value=500, min_value=1
+)
+"""Maximum number of killmails retrieved from ZKB by task run."""
+
+KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN = clean_setting(
+    "KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN", default_value=10, min_value=1
+)
+"""Maximum number of messages processed per task run."""

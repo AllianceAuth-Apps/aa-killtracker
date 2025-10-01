@@ -14,7 +14,7 @@ from allianceauth.eveonline.models import EveFactionInfo
 
 from killtracker.app_settings import KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER
 from killtracker.constants import EveCategoryId
-from killtracker.core.killmails import (
+from killtracker.core.zkb import (
     Killmail,
     KillmailAttacker,
     KillmailPosition,

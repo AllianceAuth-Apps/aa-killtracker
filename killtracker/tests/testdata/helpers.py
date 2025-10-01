@@ -8,7 +8,7 @@ from eveuniverse.models import EveEntity, EveType, EveUniverseEntityModel
 from allianceauth.eveonline.models import EveAllianceInfo, EveCorporationInfo
 from allianceauth.tests.auth_utils import AuthUtils
 
-from killtracker.core.killmails import Killmail
+from killtracker.core.zkb import Killmail
 from killtracker.models import EveKillmail, Webhook
 
 from . import _current_dir

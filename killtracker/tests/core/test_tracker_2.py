@@ -8,16 +8,16 @@ from django.test import TestCase
 
 from app_utils.django import app_labels
 
-from killtracker.core.killmails import Killmail
+from killtracker.core.zkb import Killmail
 from killtracker.models import Tracker
 from killtracker.tests.testdata.factories import TrackerFactory
 from killtracker.tests.testdata.helpers import LoadTestDataMixin, load_killmail
 
-DISCORD_MESSAGES_PATH = "killtracker.core.discord_messages"
+MODULE_PATH = "killtracker.core.trackers"
 
 if "discord" in app_labels():
 
-    @patch(DISCORD_MESSAGES_PATH + "._import_discord_user")
+    @patch(MODULE_PATH + "._import_discord_user")
     class TestGroupPings(LoadTestDataMixin, TestCase):
         @classmethod
         def setUpClass(cls):

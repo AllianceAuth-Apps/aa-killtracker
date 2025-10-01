@@ -2,10 +2,8 @@
 
 from typing import Optional
 
-import dhooks_lite
 from simple_mq import SimpleMQ
 
-from django.core.cache import cache
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -14,10 +12,9 @@ from app_utils.allianceauth import get_redis_client
 from app_utils.logging import LoggerAddTag
 from app_utils.urls import static_file_absolute_url
 
-from killtracker import APP_NAME, HOMEPAGE_URL, __title__, __version__
+from killtracker import __title__
 from killtracker.app_settings import KILLTRACKER_WEBHOOK_SET_AVATAR
-from killtracker.core.discord_messages import DiscordMessage
-from killtracker.exceptions import WebhookTooManyRequests
+from killtracker.core.discord import DiscordMessage, send_message_to_webhook
 from killtracker.managers import WebhookManager
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
@@ -25,8 +22,6 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 class Webhook(models.Model):
     """A webhook to receive messages"""
-
-    HTTP_TOO_MANY_REQUESTS = 429
 
     class WebhookType(models.IntegerChoices):
         """A webhook type."""
@@ -167,53 +162,9 @@ class Webhook(models.Model):
 
         return q.clear()
 
-    def send_message(self, message: DiscordMessage) -> dhooks_lite.WebhookResponse:
+    def send_message(self, message: DiscordMessage) -> int:
         """Send a message to the webhook."""
-        timeout = cache.ttl(self._blocked_cache_key())  # type: ignore
-        if timeout:
-            raise WebhookTooManyRequests(timeout)
-
-        hook = dhooks_lite.Webhook(
-            url=self.url,
-            user_agent=dhooks_lite.UserAgent(
-                name=APP_NAME, url=HOMEPAGE_URL, version=__version__
-            ),
-        )
-        response = hook.execute(
-            content=message.content,
-            embeds=message.embeds,
-            username=message.username,
-            avatar_url=message.avatar_url,
-            wait_for_response=True,
-            max_retries=0,  # we will handle retries ourselves
-        )
-        logger.debug(
-            "%s: Response from Discord for creating message from killmail %d: %s %s %s",
-            self,
-            message.killmail_id,
-            response.status_code,
-            response.headers,
-            response.content,
-        )
-        if response.status_code == self.HTTP_TOO_MANY_REQUESTS:
-            logger.error(
-                "%s: Received too many requests error from API: %s",
-                self,
-                response.content,
-            )
-            try:
-                retry_after = int(response.headers["Retry-After"]) + 2
-            except (ValueError, KeyError):
-                retry_after = WebhookTooManyRequests.DEFAULT_RESET_AFTER
-            cache.set(
-                key=self._blocked_cache_key(), value="BLOCKED", timeout=retry_after
-            )
-            raise WebhookTooManyRequests(retry_after)
-
-        return response
-
-    def _blocked_cache_key(self) -> str:
-        return f"{__title__}_webhook_{self.pk}_blocked"
+        return send_message_to_webhook(name=self.name, url=self.url, message=message)
 
     @staticmethod
     def create_message_link(name: str, url: str) -> str:

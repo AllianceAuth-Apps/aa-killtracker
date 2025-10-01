@@ -19,8 +19,6 @@ from killtracker.tests.testdata.helpers import (
 )
 from killtracker.tests.testdata.load_eveuniverse import load_eveuniverse
 
-MODELS_PATH = "killtracker.models.killmails"
-
 
 class TestEveKillmailManager(LoadTestDataMixin, NoSocketsTestCase):
     def test_create_from_killmail(self):

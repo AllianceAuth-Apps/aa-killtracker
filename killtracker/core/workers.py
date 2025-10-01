@@ -1,5 +1,4 @@
-"""Module worker_shutdown allows tasks to find out
-whether their worker is currently shutting down.
+"""Allows tasks to find out whether their worker is currently shutting down.
 
 This enables long running tasks to abort early,
 which helps to speed up a warm worker shutdown.
@@ -19,12 +18,12 @@ _TIMEOUT_SECONDS = 120
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-def reset(hostname: str) -> None:
+def state_reset(hostname: str) -> None:
     """Resets the shutting down state for a worker."""
     cache.delete(_make_key(hostname))
 
 
-def set(hostname: str) -> None:
+def state_set(hostname: str) -> None:
     """Sets a worker into the shutting down state."""
     cache.set(_make_key(hostname), "shutting down", timeout=_TIMEOUT_SECONDS)
 

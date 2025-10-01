@@ -24,7 +24,7 @@ from app_utils.testdata_factories import (
 from app_utils.testing import NoSocketsTestCase, add_character_to_user_2
 
 from killtracker.constants import EveGroupId
-from killtracker.core.killmails import Killmail, _EntityCount
+from killtracker.core.zkb import Killmail, _EntityCount
 from killtracker.models import Tracker
 from killtracker.tests.testdata.factories import (
     EveFactionInfoFactory,

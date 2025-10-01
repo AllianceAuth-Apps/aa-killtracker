@@ -2,7 +2,6 @@
 
 import time
 
-import dhooks_lite
 from celery import Task, chain, shared_task
 
 from django.db import IntegrityError
@@ -21,20 +20,20 @@ from killtracker.app_settings import (
     KILLTRACKER_GENERATE_MESSAGE_MAX_RETRIES,
     KILLTRACKER_GENERATE_MESSAGE_RETRY_COUNTDOWN,
     KILLTRACKER_MAX_KILLMAILS_PER_RUN,
+    KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN,
     KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS,
     KILLTRACKER_RUN_TIMEOUT,
     KILLTRACKER_STORING_KILLMAILS_ENABLED,
     KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     KILLTRACKER_TASKS_TIMEOUT,
 )
-from killtracker.core import worker_shutdown
-from killtracker.core.discord_messages import DiscordMessage
-from killtracker.core.killmails import (
-    Killmail,
-    KillmailDoesNotExist,
-    ZKBTooManyRequestsError,
+from killtracker.core import workers
+from killtracker.core.discord import (
+    DiscordMessage,
+    HTTPError,
+    WebhookRateLimitExhausted,
 )
-from killtracker.exceptions import WebhookTooManyRequests
+from killtracker.core.zkb import Killmail, KillmailDoesNotExist, ZKBTooManyRequestsError
 from killtracker.models import EveKillmail, Tracker, Webhook
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
@@ -42,7 +41,8 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 @shared_task(bind=True, base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)
 def run_killtracker(self: Task) -> int:
-    """Try to fetch new killmails from ZKB API and start trackers.
+    """Fetches and processes new killmails from ZKB API
+    and returns how many killmails were processed.
 
     This is the main periodic task for running Killtracker.
     """
@@ -64,7 +64,7 @@ def run_killtracker(self: Task) -> int:
         if is_timed_out():
             break
 
-        if worker_shutdown.is_shutting_down(self):
+        if workers.is_shutting_down(self):
             logger.debug("Aborting due to worker shutdown")
             break
 
@@ -203,54 +203,51 @@ def delete_stale_killmails() -> None:
 
 
 @shared_task(
-    bind=True,
-    base=QueueOnce,  # celery_once locks stay intact during retries
-    timeout=KILLTRACKER_TASKS_TIMEOUT,
-    retry_backoff=False,
-    max_retries=None,
+    bind=True, base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT, max_retries=None
 )
 def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
-    """Sends all queued messages to given Webhook."""
+    """Sends queued messages to a webhook.
 
-    webhook: Webhook = Webhook.objects.get_cached(
-        pk=webhook_pk,
-        timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
-    )
+    Note: This task will retry after processing a set number of messages
+    to avoid running potentially forever.
+    """
+
+    webhook: Webhook = Webhook.objects.get(pk=webhook_pk)
     if not webhook.is_enabled:
         logger.info("%s: Webhook is disabled - aborting", webhook)
         return
 
-    message = webhook.dequeue_message()
-    if not message:
-        logger.debug("%s: No more messages to send for webhook", webhook)
-        return
+    for _ in range(KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN):
+        if workers.is_shutting_down(self):
+            logger.debug("Aborting due to worker shutdown")
+            return
 
-    try:
-        response: dhooks_lite.WebhookResponse = webhook.send_message(message)
-    except WebhookTooManyRequests as ex:
-        webhook.enqueue_message(message)
-        logger.warning(
-            "%s: Too many requests for webhook. Blocked for %s seconds. Aborting.",
-            webhook,
-            ex.retry_after,
-        )
-        return
+        message = webhook.dequeue_message()
+        if not message:
+            logger.debug("%s: No more messages to send for webhook", webhook)
+            break
 
-    if not response.status_ok:
-        webhook.enqueue_message(message, is_error=True)
-        logger.warning(
-            "%s: Failed to send message for Killmail %d to webhook, will retry. "
-            "HTTP status code: %d, response: %s",
-            webhook,
-            message.killmail_id,
-            response.status_code,
-            response.content,
-        )
-    else:
         try:
-            message_id = response.content.get("id")
-        except AttributeError:
-            message_id = "?"
+            message_id = webhook.send_message(message)
+
+        except WebhookRateLimitExhausted as ex:
+            webhook.enqueue_message(message)
+            logger.warning(
+                "%s: Webhook temporarily blocked. Retrying at %s.", webhook, ex.retry_at
+            )
+            raise self.retry(eta=ex.retry_at)
+
+        except HTTPError as ex:
+            webhook.enqueue_message(message, is_error=True)
+            logger.warning(
+                "%s: Failed to send message for Killmail %d to webhook, will retry. "
+                "HTTP status code: %d",
+                webhook,
+                message.killmail_id,
+                ex.status_code,
+            )
+            continue
+
         logger.info(
             "%s: Discord message %s created for killmail %d",
             webhook,
@@ -258,7 +255,8 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
             message.killmail_id,
         )
 
-    raise self.retry(countdown=KILLTRACKER_DISCORD_SEND_DELAY)
+    if webhook.messages_queued() > 0:
+        raise self.retry(countdown=KILLTRACKER_DISCORD_SEND_DELAY)
 
 
 @shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
