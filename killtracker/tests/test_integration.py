@@ -3,12 +3,13 @@ from unittest.mock import patch
 import dhooks_lite
 import requests_mock
 
+from django.core.cache import cache
 from django.test.utils import override_settings
 
 from app_utils.testing import NoSocketsTestCase
 
 from killtracker import tasks
-from killtracker.core.zkb import ZKB_REDISQ_URL
+from killtracker.core.zkb import _ZKB_REDISQ_URL
 
 from .testdata.factories import TrackerFactory, WebhookFactory
 from .testdata.helpers import (
@@ -17,7 +18,6 @@ from .testdata.helpers import (
     load_eve_entities,
     load_eveuniverse,
 )
-from .utils import reset_celery_once_locks
 
 PACKAGE_PATH = "killtracker"
 
@@ -33,7 +33,6 @@ class TestTasksEnd2End(NoSocketsTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         super().setUpClass()
-        reset_celery_once_locks()
         load_eveuniverse()
         load_eve_corporations()
         load_eve_entities()
@@ -46,7 +45,7 @@ class TestTasksEnd2End(NoSocketsTestCase):
         )
 
     def setUp(self):
-        self.webhook.delete_queued_messages()
+        cache.clear()
 
     @patch(PACKAGE_PATH + ".tasks.retry_task_if_esi_is_down", lambda x: None)
     def test_normal_case(self, requests_mocker, mock_execute):
@@ -54,7 +53,7 @@ class TestTasksEnd2End(NoSocketsTestCase):
         mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
         requests_mocker.register_uri(
             "GET",
-            ZKB_REDISQ_URL,
+            _ZKB_REDISQ_URL,
             [
                 {"status_code": 200, "json": {"package": killmails_data()[10000001]}},
                 {"status_code": 200, "json": {"package": killmails_data()[10000002]}},
@@ -87,7 +86,7 @@ class TestTasksEnd2End(NoSocketsTestCase):
         mock_retry_task_if_esi_is_down.side_effect = my_retry_task_if_esi_is_down
         requests_mocker.register_uri(
             "GET",
-            ZKB_REDISQ_URL,
+            _ZKB_REDISQ_URL,
             [
                 {"status_code": 200, "json": {"package": killmails_data()[10000001]}},
                 {"status_code": 200, "json": {"package": None}},

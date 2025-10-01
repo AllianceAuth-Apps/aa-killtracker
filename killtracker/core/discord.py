@@ -10,6 +10,7 @@ from typing import List, Optional
 
 import dhooks_lite
 
+from django.core.cache import cache
 from django.utils.timezone import now
 
 from allianceauth.services.hooks import get_extension_logger
@@ -18,7 +19,6 @@ from app_utils.logging import LoggerAddTag
 
 from killtracker import APP_NAME, HOMEPAGE_URL, __title__, __version__
 from killtracker.app_settings import KILLTRACKER_DISCORD_SEND_DELAY
-from killtracker.core.helpers import cache_get_timestamp, cache_set_timestamp
 
 _DEFAULT_429_TIMEOUT = 600
 
@@ -95,14 +95,12 @@ def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int
     """Send a message to a Discord webhook and returns the ID of new message."""
 
     key_retry_at = _make_key_retry_at(url)
-    retry_at = cache_get_timestamp(
-        key_retry_at, now() + dt.timedelta(seconds=_DEFAULT_429_TIMEOUT)
-    )
+    retry_at = cache.get(key_retry_at)
     if retry_at is not None and retry_at > now():
         raise WebhookRateLimitExhausted(retry_at=retry_at, is_original=False)
 
-    key_last_request = f"killtracker-webhook-last-request-{url}"
-    last_request = cache_get_timestamp(key_last_request, now())
+    key_last_request = _make_key_last_request(url)
+    last_request = cache.get(key_last_request)
     if last_request is not None:
         next_slot = last_request + dt.timedelta(seconds=KILLTRACKER_DISCORD_SEND_DELAY)
         seconds = (next_slot - now()).total_seconds()
@@ -126,11 +124,7 @@ def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int
         wait_for_response=True,
         max_retries=0,  # we will handle retries ourselves
     )
-    cache_set_timestamp(
-        key_last_request,
-        now(),
-        timeout=KILLTRACKER_DISCORD_SEND_DELAY + 30,
-    )
+    cache.set(key_last_request, now(), timeout=KILLTRACKER_DISCORD_SEND_DELAY + 30)
     logger.debug(
         "%s: Response from Discord for creating message from killmail %d: %s %s %s",
         name,
@@ -146,7 +140,7 @@ def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int
             except KeyError:
                 retry_after = _DEFAULT_429_TIMEOUT
             retry_at = now() + dt.timedelta(seconds=retry_after)
-            cache_set_timestamp(key_retry_at, retry_at, timeout=retry_after + 60)
+            cache.set(key_retry_at, retry_at, timeout=retry_after + 60)
             raise WebhookRateLimitExhausted(retry_at=retry_at, is_original=True)
 
         raise HTTPError(response.status_code)
@@ -157,6 +151,10 @@ def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int
         message_id = 0
 
     return message_id
+
+
+def _make_key_last_request(url):
+    return f"killtracker-webhook-last-request-{url}"
 
 
 def _make_key_retry_at(url):

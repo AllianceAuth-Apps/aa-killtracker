@@ -17,6 +17,8 @@ from killtracker.core.discord import (
 )
 from killtracker.tests.utils import CacheFake
 
+MODULE_PATH = "killtracker.core.discord"
+
 
 class TestDiscordMessage(NoSocketsTestCase):
     def test_can_create(self):
@@ -49,7 +51,7 @@ class TestDiscordMessage(NoSocketsTestCase):
 
 
 @requests_mock.Mocker()
-@patch("killtracker.core.helpers.cache", new_callable=CacheFake)
+@patch(MODULE_PATH + ".cache", new_callable=CacheFake)
 class TestWebhookSendMessage(NoSocketsTestCase):
     def setUp(self) -> None:
         self.name = "webhook"

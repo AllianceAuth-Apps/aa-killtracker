@@ -32,19 +32,21 @@ from killtracker.app_settings import (
     KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
     KILLTRACKER_ZKB_REQUEST_DELAY,
 )
-from killtracker.core.helpers import cache_get_timestamp, cache_set_timestamp
 from killtracker.providers import esi
+
+ZKB_KILLMAIL_BASEURL = "https://zkillboard.com/kill/"
+
+_KEY_RETRY_AT = "killtracker-zkb-retry-at"
+_KEY_LAST_REQUEST = "killtracker-zkb-last-request"
+_MAIN_MINIMUM_COUNT = 2
+_MAIN_MINIMUM_SHARE = 0.25
+_REQUESTS_TIMEOUT = (5, 30)
+_ZKB_429_DEFAULT_TIMEOUT = 10
+_ZKB_API_URL = "https://zkillboard.com/api/"
+_ZKB_REDISQ_URL = "https://zkillredisq.stream/listen.php"
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
-ZKB_REDISQ_URL = "https://zkillredisq.stream/listen.php"
-ZKB_API_URL = "https://zkillboard.com/api/"
-ZKB_KILLMAIL_BASEURL = "https://zkillboard.com/kill/"
-REQUESTS_TIMEOUT = (5, 30)
-DEFAULT_429_TIMEOUT = 10
-
-MAIN_MINIMUM_COUNT = 2
-MAIN_MINIMUM_SHARE = 0.25
 
 # TODO: Factor out logic for accessing the API to another module
 
@@ -268,8 +270,8 @@ class Killmail(_KillmailBase):
         jumps: Optional[int] = None,
         distance: Optional[float] = None,
         matching_ship_type_ids: Optional[List[int]] = None,
-        minimum_count: int = MAIN_MINIMUM_COUNT,
-        minimum_share: float = MAIN_MINIMUM_SHARE,
+        minimum_count: int = _MAIN_MINIMUM_COUNT,
+        minimum_share: float = _MAIN_MINIMUM_SHARE,
     ) -> "Killmail":
         """Clone this killmail and add tracker info."""
         main_ship_group = self._calc_main_attacker_ship_group(
@@ -423,13 +425,11 @@ class Killmail(_KillmailBase):
         if "," in KILLTRACKER_QUEUE_ID:
             raise ImproperlyConfigured("A queue ID must not contains commas.")
 
-        key_retry_at = "killtracker-zkb-retry-at"
-        retry_at = cache_get_timestamp(key_retry_at, now() + dt.timedelta(seconds=30))
+        retry_at = cache.get(_KEY_RETRY_AT)
         if retry_at is not None and retry_at > now():
             raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=False)
 
-        key_last_request = "killtracker-zkb-last-request"
-        last_request = cache_get_timestamp(key_last_request, now())
+        last_request = cache.get(_KEY_LAST_REQUEST)
         if last_request is not None:
             next_slot = last_request + dt.timedelta(
                 milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY
@@ -440,17 +440,15 @@ class Killmail(_KillmailBase):
                 sleep(seconds)
 
         response = requests.get(
-            ZKB_REDISQ_URL,
+            _ZKB_REDISQ_URL,
             params={
                 "queueID": quote_plus(KILLTRACKER_QUEUE_ID),
                 "ttw": KILLTRACKER_REDISQ_TTW,
             },
-            timeout=REQUESTS_TIMEOUT,
+            timeout=_REQUESTS_TIMEOUT,
             headers={"User-Agent": USER_AGENT_TEXT},
         )
-        cache_set_timestamp(
-            key_last_request, now(), timeout=KILLTRACKER_ZKB_REQUEST_DELAY + 30
-        )
+        cache.set(_KEY_LAST_REQUEST, now(), timeout=KILLTRACKER_ZKB_REQUEST_DELAY + 30)
         logger.debug(
             "Response from ZKB API: %d %s %s",
             response.status_code,
@@ -466,9 +464,9 @@ class Killmail(_KillmailBase):
                 try:
                     retry_after = int(response.headers["Retry-After"])
                 except KeyError:
-                    retry_after = DEFAULT_429_TIMEOUT
+                    retry_after = _ZKB_429_DEFAULT_TIMEOUT
                 retry_at = now() + dt.timedelta(seconds=retry_after)
-                cache_set_timestamp(key_retry_at, retry_at, timeout=retry_after + 60)
+                cache.set(_KEY_RETRY_AT, retry_at, timeout=retry_after + 60)
                 raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=True)
 
             return None
@@ -507,9 +505,9 @@ class Killmail(_KillmailBase):
             "Trying to fetch killmail from ZKB API with killmail ID %d ...",
             killmail_id,
         )
-        url = f"{ZKB_API_URL}killID/{killmail_id}/"
+        url = f"{_ZKB_API_URL}killID/{killmail_id}/"
         response = requests.get(
-            url, timeout=REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
+            url, timeout=_REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
         )
         response.raise_for_status()
         zkb_data = response.json()
