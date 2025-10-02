@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [1.0.0a1] - 2025-10-01
 
+This release mainly fixes the occasional rate limit issues occurring for API calls to both ZKB and Discord.
+
+### Update note
+
+The setting `KILLTRACKER_MAX_KILLMAILS_PER_RUN` has been changed to an internal setting. In case you have it in your settings we recommend you remove it, since the default value and meaning has changed. (e.g. some users may have reduced this value as a counter to rate limit error. This should no longer be necessary.)
+
+Please also make sure you have updated the value for `'schedule'` of Killtracker's periodic task in your local settings as outlined in release 0.17. Please see below for details.
+
 ### Changed
 
 - BREAKING CHANGE: Support dropped for AA3
