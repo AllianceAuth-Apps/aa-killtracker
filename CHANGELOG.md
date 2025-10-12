@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [1.0.0a1] - 2025-10-01
+## [1.1.0] - 2025-10-12
+
+### Changed
+
+- Updated tasks to work with changed status endpoint. See [CHANGELOG](https://gitlab.com/ErikKalkoken/allianceauth-app-utils/-/blob/master/CHANGELOG.md#1270---2025-10-12) of app_utils for more information.
+
+## [1.0.0] - 2025-10-01
 
 This release mainly fixes the occasional rate limit issues occurring for API calls to both ZKB and Discord.
 
