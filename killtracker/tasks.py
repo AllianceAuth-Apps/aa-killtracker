@@ -11,7 +11,7 @@ from eveuniverse.tasks import update_unresolved_eve_entities
 
 from allianceauth.services.hooks import get_extension_logger
 from allianceauth.services.tasks import QueueOnce
-from app_utils.esi import retry_task_if_esi_is_down
+from app_utils.esi import retry_task_on_esi_error_and_offline
 from app_utils.logging import LoggerAddTag
 
 from killtracker import __title__
@@ -116,7 +116,6 @@ def run_tracker(
     self: Task, tracker_pk: int, killmail_id: int, ignore_max_age: bool = False
 ) -> None:
     """Run tracker for given killmail and trigger sending if needed."""
-    retry_task_if_esi_is_down(self)
     tracker: Tracker = Tracker.objects.get_cached(
         pk=tracker_pk,
         select_related="webhook",
@@ -128,9 +127,11 @@ def run_tracker(
         logger.error("Aborting. %s", ex)
         return
 
-    killmail_new = tracker.process_killmail(
-        killmail=killmail, ignore_max_age=ignore_max_age
-    )
+    with retry_task_on_esi_error_and_offline(self, f"Tracker {tracker}"):
+        killmail_new = tracker.process_killmail(
+            killmail=killmail, ignore_max_age=ignore_max_age
+        )
+
     if killmail_new:
         logger.info("%s: Killmail %d matches", tracker, killmail_id)
         killmail_new.save()
@@ -142,7 +143,6 @@ def run_tracker(
 @shared_task(bind=True, max_retries=None)
 def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> None:
     """Generate and enqueue message from given killmail and start sending."""
-    retry_task_if_esi_is_down(self)
     tracker: Tracker = Tracker.objects.get_cached(
         pk=tracker_pk,
         select_related="webhook",
@@ -166,7 +166,7 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
         )
         raise self.retry(
             max_retries=KILLTRACKER_GENERATE_MESSAGE_MAX_RETRIES,
-            countdown=KILLTRACKER_GENERATE_MESSAGE_RETRY_COUNTDOWN,
+            retry_backoff=KILLTRACKER_GENERATE_MESSAGE_RETRY_COUNTDOWN,
             exc=ex,
         )
 

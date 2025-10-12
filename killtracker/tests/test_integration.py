@@ -47,8 +47,7 @@ class TestTasksEnd2End(NoSocketsTestCase):
     def setUp(self):
         cache.clear()
 
-    @patch(PACKAGE_PATH + ".tasks.retry_task_if_esi_is_down", lambda x: None)
-    def test_normal_case(self, requests_mocker, mock_execute):
+    def test_normal_case(self, mock_execute, requests_mocker):
         # given
         mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
         requests_mocker.register_uri(
@@ -71,28 +70,3 @@ class TestTasksEnd2End(NoSocketsTestCase):
         _, kwargs = mock_execute.call_args_list[1]
         self.assertIn("My Tracker", kwargs["content"])
         self.assertIn("10000002", kwargs["embeds"][0].url)
-
-    @patch(PACKAGE_PATH + ".tasks.retry_task_if_esi_is_down")
-    def test_should_retry_when_esi_error_limit_reached(
-        self, requests_mocker, mock_retry_task_if_esi_is_down, mock_execute
-    ):
-        def my_retry_task_if_esi_is_down(task):
-            """Retry the task one time only."""
-            if task.request.retries < 1:
-                raise task.retry()
-
-        # given
-        mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
-        mock_retry_task_if_esi_is_down.side_effect = my_retry_task_if_esi_is_down
-        requests_mocker.register_uri(
-            "GET",
-            _ZKB_REDISQ_URL,
-            [
-                {"status_code": 200, "json": {"package": killmails_data()[10000001]}},
-                {"status_code": 200, "json": {"package": None}},
-            ],
-        )
-        # when
-        tasks.run_killtracker.delay()
-        # then
-        self.assertEqual(mock_execute.call_count, 1)
