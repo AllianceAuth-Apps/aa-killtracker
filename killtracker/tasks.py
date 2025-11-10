@@ -6,12 +6,11 @@ from celery import Task, chain, shared_task
 
 from django.db import IntegrityError
 from django.utils.timezone import now
-from eveuniverse.core.esitools import is_esi_online
 from eveuniverse.tasks import update_unresolved_eve_entities
 
 from allianceauth.services.hooks import get_extension_logger
 from allianceauth.services.tasks import QueueOnce
-from app_utils.esi import retry_task_on_esi_error_and_offline
+from app_utils.esi import retry_task_on_esi_issue
 from app_utils.logging import LoggerAddTag
 
 from killtracker import __title__
@@ -46,10 +45,6 @@ def run_killtracker(self: Task) -> int:
 
     This is the main periodic task for running Killtracker.
     """
-    if not is_esi_online():
-        logger.warning("ESI is currently offline. Aborting")
-        return 0
-
     for webhook in Webhook.objects.filter(is_enabled=True):
         webhook.reset_failed_messages()
 
@@ -71,15 +66,15 @@ def run_killtracker(self: Task) -> int:
         killmail = None
         try:
             killmail = Killmail.create_from_zkb_redisq()
-        except ZKBTooManyRequestsError as ex:
-            seconds = (ex.retry_at - now()).total_seconds()
+        except ZKBTooManyRequestsError as exc:
+            seconds = (exc.retry_at - now()).total_seconds()
             if seconds < 0:
                 break
 
             logger.warning(
                 "Killtracker has been baned from ZKB API for %f seconds", seconds
             )
-            raise self.retry(countdown=seconds)
+            raise self.retry(countdown=seconds, exc=exc)
 
         if not killmail:
             break
@@ -111,7 +106,12 @@ def run_killtracker(self: Task) -> int:
     return killmails_count
 
 
-@shared_task(bind=True, max_retries=None)
+@shared_task(
+    bind=True,
+    max_retries=None,
+    base=QueueOnce,
+    once={"keys": ["tracker_pk", "killmail_id"], "graceful": True},
+)
 def run_tracker(
     self: Task, tracker_pk: int, killmail_id: int, ignore_max_age: bool = False
 ) -> None:
@@ -127,7 +127,7 @@ def run_tracker(
         logger.error("Aborting. %s", ex)
         return
 
-    with retry_task_on_esi_error_and_offline(self, f"Tracker {tracker}"):
+    with retry_task_on_esi_issue(self):
         killmail_new = tracker.process_killmail(
             killmail=killmail, ignore_max_age=ignore_max_age
         )
@@ -140,7 +140,12 @@ def run_tracker(
         send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
 
 
-@shared_task(bind=True, max_retries=None)
+@shared_task(
+    bind=True,
+    max_retries=None,
+    base=QueueOnce,
+    once={"keys": ["tracker_pk", "killmail_id"], "graceful": True},
+)
 def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> None:
     """Generate and enqueue message from given killmail and start sending."""
     tracker: Tracker = Tracker.objects.get_cached(
@@ -150,12 +155,12 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
     )
     try:
         killmail = Killmail.get(killmail_id)
-    except KillmailDoesNotExist as ex:
-        logger.error("Aborting. %s", ex)
+    except KillmailDoesNotExist as exc:
+        logger.error("Aborting. %s", exc)
         return
     try:
         tracker.generate_killmail_message(killmail)
-    except Exception as ex:
+    except Exception as exc:
         will_retry = self.request.retries < KILLTRACKER_GENERATE_MESSAGE_MAX_RETRIES
         logger.warning(
             "%s: Failed to generate killmail %s.%s",
@@ -167,7 +172,7 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
         raise self.retry(
             max_retries=KILLTRACKER_GENERATE_MESSAGE_MAX_RETRIES,
             retry_backoff=KILLTRACKER_GENERATE_MESSAGE_RETRY_COUNTDOWN,
-            exc=ex,
+            exc=exc,
         )
 
     send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
@@ -176,7 +181,11 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
     )
 
 
-@shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
+@shared_task(
+    base=QueueOnce,
+    once={"keys": ["killmail_id"], "graceful": True},
+    timeout=KILLTRACKER_TASKS_TIMEOUT,
+)
 def store_killmail(killmail_id: int) -> None:
     """Stores killmail as EveKillmail object."""
     try:
@@ -194,7 +203,7 @@ def store_killmail(killmail_id: int) -> None:
         logger.info("%s: Stored killmail", killmail.id)
 
 
-@shared_task(timeout=KILLTRACKER_TASKS_TIMEOUT)
+@shared_task(base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)
 def delete_stale_killmails() -> None:
     """Deletes all EveKillmail objects that are considered stale."""
     _, details = EveKillmail.objects.delete_stale()
@@ -203,7 +212,11 @@ def delete_stale_killmails() -> None:
 
 
 @shared_task(
-    bind=True, base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT, max_retries=None
+    bind=True,
+    base=QueueOnce,
+    once={"keys": ["webhook_pk"], "graceful": True},
+    max_retries=None,
+    timeout=KILLTRACKER_TASKS_TIMEOUT,
 )
 def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
     """Sends queued messages to a webhook.
@@ -230,21 +243,23 @@ def send_messages_to_webhook(self: Task, webhook_pk: int) -> None:
         try:
             message_id = webhook.send_message(message)
 
-        except WebhookRateLimitExhausted as ex:
+        except WebhookRateLimitExhausted as exc:
             webhook.enqueue_message(message)
             logger.warning(
-                "%s: Webhook temporarily blocked. Retrying at %s.", webhook, ex.retry_at
+                "%s: Webhook temporarily blocked. Retrying at %s.",
+                webhook,
+                exc.retry_at,
             )
-            raise self.retry(eta=ex.retry_at)
+            raise self.retry(eta=exc.retry_at, exc=exc)
 
-        except HTTPError as ex:
+        except HTTPError as exc:
             webhook.enqueue_message(message, is_error=True)
             logger.warning(
                 "%s: Failed to send message for Killmail %d to webhook, will retry. "
                 "HTTP status code: %d",
                 webhook,
                 message.killmail_id,
-                ex.status_code,
+                exc.status_code,
             )
             continue
 
