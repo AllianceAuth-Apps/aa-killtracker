@@ -14,8 +14,13 @@ This release adds basic support for ESI rate limits and contains breaking change
 ### Changed
 
 - BREAKING CHANGE: Dropped support for Python 3.8, 3.9
-- Added support for ESI rate limits
+- Added basic support for ESI rate limits
 - Added support for Python 3.13
+
+### Fixed
+
+- Killmails sometimes take a very long time to post on Discord
+- Purging large message queues can take a long time
 
 ## [1.1.0] - 2025-10-12
 
