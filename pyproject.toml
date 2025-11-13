@@ -8,7 +8,7 @@ authors = [{ name = "Erik Kalkoken", email = "kalkoken87@gmail.com" }]
 readme = "README.md"
 dynamic = ["version", "description"]
 license = { file = "LICENSE" }
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 classifiers = [
     "Environment :: Web Environment",
     "Framework :: Django",
@@ -17,20 +17,21 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP",
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 dependencies = [
-    "allianceauth-app-utils>=2.0a1",
+    "allianceauth-app-utils>=1.27",
     "allianceauth>=4,<5",
     "dacite",
     "dhooks-lite>=1.1",
     "django-eveuniverse>=1.6",
-    "redis-simple-mq>=1.0",
+    "redis-simple-mq>=1.1",
 ]
 
 [project.urls]

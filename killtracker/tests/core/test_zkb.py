@@ -10,7 +10,7 @@ from django.utils.dateparse import parse_datetime
 from django.utils.timezone import now
 
 from app_utils.esi_testing import BravadoOperationStub
-from app_utils.testing import CacheFake, NoSocketsTestCase
+from app_utils.testing import NoSocketsTestCase
 
 from killtracker.core.zkb import (
     _KEY_LAST_REQUEST,
@@ -25,6 +25,7 @@ from killtracker.core.zkb import (
 from killtracker.tests import CacheStub
 from killtracker.tests.testdata.factories import KillmailFactory
 from killtracker.tests.testdata.helpers import killmails_data, load_killmail
+from killtracker.tests.utils import CacheFake
 
 MODULE_PATH = "killtracker.core.zkb"
 unittest.util._MAX_LENGTH = 1000

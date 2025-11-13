@@ -2,9 +2,8 @@ from unittest.mock import patch
 
 from django.test import TestCase
 
-from app_utils.testing import CacheFake
-
 from killtracker.core import workers
+from killtracker.tests.utils import CacheFake
 
 MODULE_PATH = "killtracker.core.workers"
 

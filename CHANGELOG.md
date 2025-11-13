@@ -7,15 +7,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [2.0.0] - TBD
+## [1.1.1] - 2025-11-13
 
-This release adds basic support for ESI rate limits and contains breaking changes.
+### Update notes
 
-### Changed
-
-- BREAKING CHANGE: Dropped support for Python 3.8, 3.9
-- Added basic support for ESI rate limits
-- Added support for Python 3.13
+Due to a previous bug the message queue for a webhooks could have become very large.
+If your queues are large (e.g. > 1000), we recommend to purge the messages.
+Or you can just wait for the queues to be processed.
+You can see the size of the message queues on the admin page for webhooks
+and also purge it there through an action.
 
 ### Fixed
 

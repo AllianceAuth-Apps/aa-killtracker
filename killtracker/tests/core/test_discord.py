@@ -6,7 +6,7 @@ import requests_mock
 
 from django.utils.timezone import now
 
-from app_utils.testing import CacheFake, NoSocketsTestCase
+from app_utils.testing import NoSocketsTestCase
 
 from killtracker.core.discord import (
     DiscordMessage,
@@ -16,6 +16,7 @@ from killtracker.core.discord import (
     _make_key_retry_at,
     send_message_to_webhook,
 )
+from killtracker.tests.utils import CacheFake
 
 MODULE_PATH = "killtracker.core.discord"
 

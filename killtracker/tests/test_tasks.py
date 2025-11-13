@@ -5,8 +5,6 @@ from django.core.cache import cache
 from django.test import TestCase, override_settings
 from django.utils.timezone import now
 
-from app_utils.testing import reset_celery_once_locks
-
 from killtracker.core.discord import (
     DiscordMessage,
     HTTPError,
@@ -22,6 +20,7 @@ from killtracker.tasks import (
     send_messages_to_webhook,
     store_killmail,
 )
+from killtracker.tests.utils import reset_celery_once_locks
 
 from .testdata.factories import TrackerFactory
 from .testdata.helpers import LoadTestDataMixin, load_eve_killmails, load_killmail

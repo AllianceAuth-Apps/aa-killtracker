@@ -10,7 +10,7 @@ from eveuniverse.tasks import update_unresolved_eve_entities
 
 from allianceauth.services.hooks import get_extension_logger
 from allianceauth.services.tasks import QueueOnce
-from app_utils.esi import retry_task_on_esi_issue
+from app_utils.esi import retry_task_on_esi_error_and_offline
 from app_utils.logging import LoggerAddTag
 
 from killtracker import __title__
@@ -127,7 +127,7 @@ def run_tracker(
         logger.error("Aborting. %s", ex)
         return
 
-    with retry_task_on_esi_issue(self):
+    with retry_task_on_esi_error_and_offline(self, "killtracker.tasks.run_tracker"):
         killmail_new = tracker.process_killmail(
             killmail=killmail, ignore_max_age=ignore_max_age
         )
