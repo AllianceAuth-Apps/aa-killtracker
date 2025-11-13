@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.1.1] - 2025-11-13
+
+### Update notes
+
+Due to a previous bug the message queue for a webhooks could have become very large.
+If your queues are large (e.g. > 1000), we recommend to purge the messages.
+Or you can just wait for the queues to be processed.
+You can see the size of the message queues on the admin page for webhooks
+and also purge it there through an action.
+
+### Fixed
+
+- Killmails sometimes take a very long time to post on Discord
+- Purging large message queues can take a long time
+
 ## [1.1.0] - 2025-10-12
 
 ### Changed

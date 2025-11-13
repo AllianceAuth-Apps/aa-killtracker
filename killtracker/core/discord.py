@@ -21,7 +21,7 @@ from killtracker import APP_NAME, HOMEPAGE_URL, __title__, __version__
 from killtracker.app_settings import KILLTRACKER_DISCORD_SEND_DELAY
 from killtracker.core.helpers import datetime_or_none
 
-_DEFAULT_429_TIMEOUT = 600
+_DEFAULT_429_TIMEOUT = 600 * 1000  # milliseconds
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
@@ -137,11 +137,11 @@ def send_message_to_webhook(name: str, url: str, message: DiscordMessage) -> int
     if not response.status_ok:
         if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
             try:
-                retry_after = int(response.headers["Retry-After"])
+                retry_after_ms = int(response.headers["retry-after"])
             except KeyError:
-                retry_after = _DEFAULT_429_TIMEOUT
-            retry_at = now() + dt.timedelta(seconds=retry_after)
-            cache.set(key_retry_at, retry_at, timeout=retry_after + 60)
+                retry_after_ms = _DEFAULT_429_TIMEOUT
+            retry_at = now() + dt.timedelta(milliseconds=retry_after_ms)
+            cache.set(key_retry_at, retry_at, timeout=retry_after_ms / 1000 + 60)
             raise WebhookRateLimitExhausted(retry_at=retry_at, is_original=True)
 
         raise HTTPError(response.status_code)

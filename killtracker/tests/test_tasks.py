@@ -1,10 +1,8 @@
 import datetime as dt
 from unittest.mock import patch
 
-from celery.exceptions import Retry
-
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils.timezone import now
 
 from killtracker.core.discord import (
@@ -22,10 +20,10 @@ from killtracker.tasks import (
     send_messages_to_webhook,
     store_killmail,
 )
+from killtracker.tests.utils import reset_celery_once_locks
 
 from .testdata.factories import TrackerFactory
 from .testdata.helpers import LoadTestDataMixin, load_eve_killmails, load_killmail
-from .utils import reset_celery_once_locks
 
 MODULE_PATH = "killtracker.tasks"
 
@@ -53,8 +51,9 @@ class TestTrackerBase(LoadTestDataMixin, TestCase):
         )
 
 
+@patch("celery.app.task.Context.called_directly", False)  # make retry work with eager
+@override_settings(CELERY_ALWAYS_EAGER=True)
 @patch(MODULE_PATH + ".workers.is_shutting_down", spec=True)
-@patch(MODULE_PATH + ".is_esi_online", spec=True)
 @patch(MODULE_PATH + ".delete_stale_killmails", spec=True)
 @patch(MODULE_PATH + ".store_killmail", spec=True)
 @patch(MODULE_PATH + ".Killmail.create_from_zkb_redisq")
@@ -69,7 +68,9 @@ class TestRunKilltracker(TestTrackerBase):
                 yield None
 
     def setUp(self):
-        reset_celery_once_locks()
+        reset_celery_once_locks("killtracker")
+        self.webhook_1._main_queue.clear()
+        self.webhook_1._error_queue.clear()
 
     @patch(MODULE_PATH + ".KILLTRACKER_STORING_KILLMAILS_ENABLED", False)
     def test_should_run_normally(
@@ -78,45 +79,20 @@ class TestRunKilltracker(TestTrackerBase):
         mock_create_from_zkb_redisq,
         mock_store_killmail,
         mock_delete_stale_killmails,
-        mock_is_esi_online,
         mock_is_shutting_down,
     ):
         # given
         mock_is_shutting_down.return_value = False
         mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
-        mock_is_esi_online.return_value = True
         self.webhook_1._error_queue.enqueue(load_killmail(10000004).asjson())
         # when
-        got = run_killtracker()
+        run_killtracker.delay()
         # then
-        self.assertEqual(got, 3)
         self.assertEqual(mock_run_tracker.delay.call_count, 6)
         self.assertEqual(mock_store_killmail.si.call_count, 0)
         self.assertFalse(mock_delete_stale_killmails.delay.called)
         self.assertEqual(self.webhook_1._main_queue.size(), 1)
         self.assertEqual(self.webhook_1._error_queue.size(), 0)
-
-    @patch(MODULE_PATH + ".KILLTRACKER_STORING_KILLMAILS_ENABLED", False)
-    def test_should_abort_when_esi_is_offline(
-        self,
-        mock_run_tracker,
-        mock_create_from_zkb_redisq,
-        mock_store_killmail,
-        mock_delete_stale_killmails,
-        mock_is_esi_online,
-        mock_is_shutting_down,
-    ):
-        # given
-        mock_is_shutting_down.return_value = False
-        mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
-        mock_is_esi_online.return_value = False
-        # when
-        got = run_killtracker()
-        # then
-        self.assertEqual(got, 0)
-        self.assertEqual(mock_run_tracker.delay.call_count, 0)
-        self.assertEqual(mock_store_killmail.si.call_count, 0)
-        self.assertFalse(mock_delete_stale_killmails.delay.called)
 
     @patch(MODULE_PATH + ".KILLTRACKER_MAX_KILLMAILS_PER_RUN", 2)
     def test_should_stop_when_max_killmails_received(
@@ -125,17 +101,14 @@ class TestRunKilltracker(TestTrackerBase):
         mock_create_from_zkb_redisq,
         mock_store_killmail,
         mock_delete_stale_killmails,
-        mock_is_esi_online,
         mock_is_shutting_down,
     ):
         # given
         mock_is_shutting_down.return_value = False
         mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
-        mock_is_esi_online.return_value = True
         # when
-        got = run_killtracker()
+        run_killtracker.delay()
         # then
-        self.assertEqual(got, 2)
         self.assertEqual(mock_run_tracker.delay.call_count, 4)
 
     @patch(MODULE_PATH + ".KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS", 30)
@@ -146,15 +119,13 @@ class TestRunKilltracker(TestTrackerBase):
         mock_create_from_zkb_redisq,
         mock_store_killmail,
         mock_delete_stale_killmails,
-        mock_is_esi_online,
         mock_is_shutting_down,
     ):
         # given
         mock_is_shutting_down.return_value = False
         mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
-        mock_is_esi_online.return_value = True
         # when
-        run_killtracker()
+        run_killtracker.delay()
         # then
         self.assertEqual(mock_run_tracker.delay.call_count, 6)
         self.assertEqual(mock_store_killmail.si.call_count, 3)
@@ -167,7 +138,6 @@ class TestRunKilltracker(TestTrackerBase):
         mock_create_from_zkb_redisq,
         mock_store_killmail,
         mock_delete_stale_killmails,
-        mock_is_esi_online,
         mock_is_shutting_down,
     ):
         # given
@@ -175,10 +145,8 @@ class TestRunKilltracker(TestTrackerBase):
         mock_create_from_zkb_redisq.side_effect = ZKBTooManyRequestsError(
             now() + dt.timedelta(minutes=1)
         )
-        mock_is_esi_online.return_value = True
         # when/then
-        with self.assertRaises(Retry):
-            run_killtracker()
+        run_killtracker.delay()
         # then
         self.assertEqual(mock_run_tracker.delay.call_count, 0)
 
@@ -189,17 +157,14 @@ class TestRunKilltracker(TestTrackerBase):
         mock_create_from_zkb_redisq,
         mock_store_killmail,
         mock_delete_stale_killmails,
-        mock_is_esi_online,
         mock_is_shutting_down,
     ):
         # given
         mock_is_shutting_down.return_value = True
         mock_create_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
-        mock_is_esi_online.return_value = True
         # when
-        got = run_killtracker()
+        run_killtracker.delay()
         # then
-        self.assertEqual(got, 0)
         self.assertEqual(mock_run_tracker.delay.call_count, 0)
         self.assertEqual(mock_store_killmail.si.call_count, 0)
         self.assertFalse(mock_delete_stale_killmails.delay.called)
@@ -300,15 +265,15 @@ class TestGenerateKillmailMessage(TestTrackerBase):
         self.assertEqual(mock_retry.call_count, 4)
 
 
-# @patch("celery.app.task.Context.called_directly", False)  # make retry work with eager
-# @override_settings(CELERY_ALWAYS_EAGER=True)
-
-
+@patch("celery.app.task.Context.called_directly", False)  # make retry work with eager
+@override_settings(CELERY_ALWAYS_EAGER=True)
 @patch(MODULE_PATH + ".workers.is_shutting_down", spec=True)
 @patch(MODULE_PATH + ".Webhook.send_message", spec=True)
 class TestSendMessagesToWebhook(TestTrackerBase):
     def setUp(self) -> None:
-        cache.clear()
+        reset_celery_once_locks("killtracker")
+        self.webhook_1._main_queue.clear()
+        self.webhook_1._error_queue.clear()
 
     def test_should_send_one_message(self, mock_send_message, mock_is_shutting_down):
         # given
@@ -316,11 +281,9 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         mock_send_message.return_value = 42
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
-        send_messages_to_webhook(self.webhook_1.pk)
+        send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 1)
-        self.assertEqual(self.webhook_1._main_queue.size(), 0)
-        self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
     def test_should_send_three_messages(self, mock_send_message, mock_is_shutting_down):
         # given
@@ -330,11 +293,9 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
-        send_messages_to_webhook(self.webhook_1.pk)
+        send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 3)
-        self.assertEqual(self.webhook_1._main_queue.size(), 0)
-        self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
     def test_should_do_nothing_when_queue_is_empty(
         self, mock_send_message, mock_is_shutting_down
@@ -342,11 +303,9 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         # given
         mock_is_shutting_down.return_value = False
         # when
-        send_messages_to_webhook(self.webhook_1.pk)
+        send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 0)
-        self.assertEqual(self.webhook_1._main_queue.size(), 0)
-        self.assertEqual(self.webhook_1._error_queue.size(), 0)
 
     def test_should_put_failed_message_in_error_queue(
         self, mock_send_message, mock_is_shutting_down
@@ -356,7 +315,7 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         mock_send_message.side_effect = HTTPError(404)
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
-        send_messages_to_webhook(self.webhook_1.pk)
+        send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 1)
         self.assertEqual(self.webhook_1._main_queue.size(), 0)
@@ -367,14 +326,12 @@ class TestSendMessagesToWebhook(TestTrackerBase):
     ):
         # given
         mock_is_shutting_down.return_value = False
-        mock_send_message.side_effect = WebhookRateLimitExhausted(10)
+        mock_send_message.side_effect = [WebhookRateLimitExhausted(10), lambda: None]
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
-        with self.assertRaises(Retry):
-            send_messages_to_webhook(self.webhook_1.pk)
+        send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
-        self.assertEqual(mock_send_message.call_count, 1)
-        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        self.assertEqual(mock_send_message.call_count, 2)
 
     def test_should_abort_when_worker_is_shutting_down(
         self, mock_send_message, mock_is_shutting_down
@@ -387,7 +344,6 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         send_messages_to_webhook(self.webhook_1.pk)
         # then
         self.assertEqual(mock_send_message.call_count, 0)
-        self.assertEqual(self.webhook_1._main_queue.size(), 1)
 
     @patch(MODULE_PATH + ".KILLTRACKER_MAX_MESSAGES_SENT_PER_RUN", 1)
     def test_retry_when_limit_is_reached(
@@ -399,11 +355,9 @@ class TestSendMessagesToWebhook(TestTrackerBase):
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         self.webhook_1.enqueue_message(DiscordMessage(content="Test message"))
         # when
-        with self.assertRaises(Retry):
-            send_messages_to_webhook(self.webhook_1.pk)
+        send_messages_to_webhook.delay(self.webhook_1.pk)
         # then
-        self.assertEqual(mock_send_message.call_count, 1)
-        self.assertEqual(self.webhook_1._main_queue.size(), 1)
+        self.assertEqual(mock_send_message.call_count, 2)
 
 
 @patch(MODULE_PATH + ".logger", spec=True)

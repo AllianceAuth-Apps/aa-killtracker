@@ -26,7 +26,6 @@ PACKAGE_PATH = "killtracker"
 @override_settings(CELERY_ALWAYS_EAGER=True)
 @patch(PACKAGE_PATH + ".core.zkb.KILLTRACKER_QUEUE_ID", "dummy")
 @patch(PACKAGE_PATH + ".tasks.workers.is_shutting_down", lambda x: False)
-@patch(PACKAGE_PATH + ".tasks.is_esi_online", lambda: True)
 @patch(PACKAGE_PATH + ".core.discord.dhooks_lite.Webhook.execute", spec=True)
 @requests_mock.Mocker()
 class TestTasksEnd2End(NoSocketsTestCase):

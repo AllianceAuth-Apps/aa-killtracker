@@ -30,8 +30,8 @@ dependencies = [
     "allianceauth>=4,<5",
     "dacite",
     "dhooks-lite>=1.1",
-    "django-eveuniverse>=1.5",
-    "redis-simple-mq>=1.0",
+    "django-eveuniverse>=1.6",
+    "redis-simple-mq>=1.1",
 ]
 
 [project.urls]
