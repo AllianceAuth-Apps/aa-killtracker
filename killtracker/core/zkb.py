@@ -1,4 +1,4 @@
-"""Fetch killmails from zKillboard."""
+"""Fetch killmails from zKillboard API."""
 
 # pylint: disable = redefined-builtin
 
@@ -169,7 +169,7 @@ class TrackerInfo(_KillmailBase):
 
 @dataclass
 class Killmail(_KillmailBase):
-    """A killmail body."""
+    """A ZKB Killmail."""
 
     _STORAGE_BASE_KEY = "killtracker_storage_killmail_"
 
@@ -403,160 +403,14 @@ class Killmail(_KillmailBase):
 
     @classmethod
     def from_json(cls, json_str: str) -> "Killmail":
-        """Create new object from JSON data."""
+        """Create and return new object from JSON data."""
         return cls.from_dict(json.loads(json_str, cls=JSONDateTimeDecoder))
 
     @classmethod
-    def create_from_zkb_redisq(cls) -> Optional["Killmail"]:
-        """Fetches and returns a killmail from ZKB REDISQ API.
-
-        Will automatically wait for a free rate limit slot if needed.
-        Will re-raise TooManyRequests if a recent 429 timeout is not yet expired.
-
-        This method is not thread safe.
-
-        Returns None if no killmail was received.
-        """
-        if not KILLTRACKER_QUEUE_ID:
-            raise ImproperlyConfigured(
-                "You need to define a queue ID in your settings."
-            )
-
-        if "," in KILLTRACKER_QUEUE_ID:
-            raise ImproperlyConfigured("A queue ID must not contains commas.")
-
-        retry_at = datetime_or_none(cache.get(_KEY_RETRY_AT))
-        if retry_at is not None and retry_at > now():
-            raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=False)
-
-        last_request = datetime_or_none(cache.get(_KEY_LAST_REQUEST))
-        if last_request is not None:
-            next_slot = last_request + dt.timedelta(
-                milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY
-            )
-            seconds = (next_slot - now()).total_seconds()
-            if seconds > 0:
-                logger.debug("ZKB API: Waiting %f seconds for next free slot", seconds)
-                sleep(seconds)
-
-        response = requests.get(
-            _ZKB_REDISQ_URL,
-            params={
-                "queueID": quote_plus(KILLTRACKER_QUEUE_ID),
-                "ttw": KILLTRACKER_REDISQ_TTW,
-            },
-            timeout=_REQUESTS_TIMEOUT,
-            headers={"User-Agent": USER_AGENT_TEXT},
-        )
-        cache.set(_KEY_LAST_REQUEST, now(), timeout=KILLTRACKER_ZKB_REQUEST_DELAY + 30)
-        logger.debug(
-            "Response from ZKB API: %d %s %s",
-            response.status_code,
-            response.headers,
-            response.text,
-        )
-
-        if not response.ok:
-            logger.warning(
-                "ZKB API returned error: %d %s", response.status_code, response.text
-            )
-            if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
-                try:
-                    retry_after = int(response.headers["Retry-After"])
-                except KeyError:
-                    retry_after = _ZKB_429_DEFAULT_TIMEOUT
-                retry_at = now() + dt.timedelta(seconds=retry_after)
-                cache.set(_KEY_RETRY_AT, retry_at, timeout=retry_after + 60)
-                raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=True)
-
-            return None
-
-        try:
-            data = response.json()
-        except JSONDecodeError:
-            logger.error("Error parsing ZKB API response:\n%s", response.text)
-            return None
-
-        if not data or "package" not in data or not data["package"]:
-            logger.info("ZKB did not return a killmail")
-            return None
-
-        package_data = data["package"]
-        try:
-            killmail_id = package_data["killID"]
-            killmail_zkb = package_data["zkb"]
-        except KeyError:
-            logger.warning(
-                "Failed to parse response from ZKB: %s", package_data, exc_info=True
-            )
-            return None
-
-        killmail = cls._create_from_esi(killmail_id, killmail_zkb)
-        if not killmail:
-            logger.info("Failed to parse killmail from ZKB")
-            return None
-
-        logger.info("ZKB returned killmail %d", killmail.id)
-        return killmail
-
-    @classmethod
-    def create_from_zkb_api(cls, killmail_id: int) -> Optional["Killmail"]:
-        """Fetches and returns a killmail from ZKB API.
-
-        results are cached
-        """
-        cache_key = f"{__title__.upper()}_KILLMAIL_{killmail_id}"
-        killmail_json = cache.get(cache_key)
-        if killmail_json:
-            return Killmail.from_json(killmail_json)
-
-        url = f"{_ZKB_API_URL}killID/{killmail_id}/"
-        response = requests.get(
-            url, timeout=_REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
-        )
-        response.raise_for_status()
-        data = response.json()
-        if not data:
-            logger.warning(
-                "ZKB API did not return any data for killmail ID %d", killmail_id
-            )
-            return None
-
-        logger.info("Received killmail from ZKB API with ID %d", killmail_id)
-        logger.debug("data:\n%s", data)
-        try:
-            killmail_zkb = data[0]["zkb"]
-        except KeyError:
-            return None
-
-        killmail = cls._create_from_esi(killmail_id, killmail_zkb)
-        if killmail:
-            cache.set(key=cache_key, value=killmail.asjson())
-        return killmail
-
-    @classmethod
-    def _create_from_esi(
-        cls, killmail_id: int, killmail_zkb: dict
-    ) -> Optional["Killmail"]:
-        killmail: dict = esi.client.Killmails.get_killmails_killmail_id_killmail_hash(
-            killmail_id=killmail_id,
-            killmail_hash=killmail_zkb["hash"],
-        ).results()
-        if not killmail:
-            logger.warning(
-                "ESI did not return any data for killmail ID %d", killmail_id
-            )
-            return None
-
-        return cls._create_from_dict(killmail_id, killmail, killmail_zkb)
-
-    @classmethod
-    def _create_from_dict(
+    def create_from_zkb_data(
         cls, killmail_id: int, killmail_data: dict, killmail_zkb: dict
     ) -> Optional["Killmail"]:
-        """Create a new Killmail from a dict.
-        Needs to conform with data structure returned from ZKB RedisQ
-        """
+        """Create and return a new Killmail object from ZKB data."""
 
         victim, position = cls._extract_victim_and_position(killmail_data)
         attackers = cls._extract_attackers(killmail_data)
@@ -637,3 +491,144 @@ class Killmail(_KillmailBase):
                     params[prop] = data[prop]
 
         return KillmailZkb(**params)
+
+
+def fetch_killmail_from_redisq() -> Optional["Killmail"]:
+    """Fetches and returns a killmail from ZKB REDISQ API.
+
+    Will automatically wait for a free rate limit slot if needed.
+    Will re-raise TooManyRequests if a recent 429 timeout is not yet expired.
+
+    This method is not thread safe.
+
+    Returns None if no killmail was received.
+    """
+    if not KILLTRACKER_QUEUE_ID:
+        raise ImproperlyConfigured("You need to define a queue ID in your settings.")
+
+    if "," in KILLTRACKER_QUEUE_ID:
+        raise ImproperlyConfigured("A queue ID must not contains commas.")
+
+    retry_at = datetime_or_none(cache.get(_KEY_RETRY_AT))
+    if retry_at is not None and retry_at > now():
+        raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=False)
+
+    last_request = datetime_or_none(cache.get(_KEY_LAST_REQUEST))
+    if last_request is not None:
+        next_slot = last_request + dt.timedelta(
+            milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY
+        )
+        seconds = (next_slot - now()).total_seconds()
+        if seconds > 0:
+            logger.debug("ZKB API: Waiting %f seconds for next free slot", seconds)
+            sleep(seconds)
+
+    response = requests.get(
+        _ZKB_REDISQ_URL,
+        params={
+            "queueID": quote_plus(KILLTRACKER_QUEUE_ID),
+            "ttw": KILLTRACKER_REDISQ_TTW,
+        },
+        timeout=_REQUESTS_TIMEOUT,
+        headers={"User-Agent": USER_AGENT_TEXT},
+    )
+    cache.set(_KEY_LAST_REQUEST, now(), timeout=KILLTRACKER_ZKB_REQUEST_DELAY + 30)
+    logger.debug(
+        "Response from ZKB API: %d %s %s",
+        response.status_code,
+        response.headers,
+        response.text,
+    )
+
+    if not response.ok:
+        logger.warning(
+            "ZKB API returned error: %d %s", response.status_code, response.text
+        )
+        if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
+            try:
+                retry_after = int(response.headers["Retry-After"])
+            except KeyError:
+                retry_after = _ZKB_429_DEFAULT_TIMEOUT
+            retry_at = now() + dt.timedelta(seconds=retry_after)
+            cache.set(_KEY_RETRY_AT, retry_at, timeout=retry_after + 60)
+            raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=True)
+
+        return None
+
+    try:
+        data = response.json()
+    except JSONDecodeError:
+        logger.error("Error parsing ZKB API response:\n%s", response.text)
+        return None
+
+    if not data or "package" not in data or not data["package"]:
+        logger.info("ZKB did not return a killmail")
+        return None
+
+    package_data = data["package"]
+    try:
+        killmail_id = package_data["killID"]
+        killmail_zkb = package_data["zkb"]
+    except KeyError:
+        logger.warning(
+            "Failed to parse response from ZKB: %s", package_data, exc_info=True
+        )
+        return None
+
+    killmail = _fetch_killmail_from_esi(killmail_id, killmail_zkb)
+    if not killmail:
+        logger.info("Failed to parse killmail from ZKB")
+        return None
+
+    logger.info("ZKB returned killmail %d", killmail.id)
+    return killmail
+
+
+def fetch_killmail_from_api(killmail_id: int) -> Optional["Killmail"]:
+    """Fetches and returns a killmail from ZKB API.
+
+    Results are cached.
+    """
+    cache_key = f"{__title__.upper()}_KILLMAIL_{killmail_id}"
+    killmail_json = cache.get(cache_key)
+    if killmail_json:
+        return Killmail.from_json(killmail_json)
+
+    url = f"{_ZKB_API_URL}killID/{killmail_id}/"
+    response = requests.get(
+        url, timeout=_REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not data:
+        logger.warning(
+            "ZKB API did not return any data for killmail ID %d", killmail_id
+        )
+        return None
+
+    logger.info("Received killmail from ZKB API with ID %d", killmail_id)
+    logger.debug("data:\n%s", data)
+    try:
+        killmail_zkb = data[0]["zkb"]
+    except KeyError:
+        return None
+
+    killmail = _fetch_killmail_from_esi(killmail_id, killmail_zkb)
+    if killmail:
+        cache.set(key=cache_key, value=killmail.asjson())
+    return killmail
+
+
+def _fetch_killmail_from_esi(
+    killmail_id: int, killmail_zkb: dict
+) -> Optional["Killmail"]:
+    """Fetch and return a Killmail from ESI."""
+    killmail: dict = esi.client.Killmails.get_killmails_killmail_id_killmail_hash(
+        killmail_id=killmail_id,
+        killmail_hash=killmail_zkb["hash"],
+    ).results()
+    if not killmail:
+        logger.warning("ESI did not return any data for killmail ID %d", killmail_id)
+        return None
+
+    return Killmail.create_from_zkb_data(killmail_id, killmail, killmail_zkb)

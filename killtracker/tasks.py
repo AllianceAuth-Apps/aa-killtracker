@@ -26,13 +26,12 @@ from killtracker.app_settings import (
     KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     KILLTRACKER_TASKS_TIMEOUT,
 )
-from killtracker.core import workers
+from killtracker.core import workers, zkb
 from killtracker.core.discord import (
     DiscordMessage,
     HTTPError,
     WebhookRateLimitExhausted,
 )
-from killtracker.core.zkb import Killmail, KillmailDoesNotExist, ZKBTooManyRequestsError
 from killtracker.models import EveKillmail, Tracker, Webhook
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
@@ -65,8 +64,8 @@ def run_killtracker(self: Task) -> int:
 
         killmail = None
         try:
-            killmail = Killmail.create_from_zkb_redisq()
-        except ZKBTooManyRequestsError as exc:
+            killmail = zkb.fetch_killmail_from_redisq()
+        except zkb.ZKBTooManyRequestsError as exc:
             seconds = (exc.retry_at - now()).total_seconds()
             if seconds < 0:
                 break
@@ -122,8 +121,8 @@ def run_tracker(
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
     try:
-        killmail = Killmail.get(killmail_id)
-    except KillmailDoesNotExist as ex:
+        killmail = zkb.Killmail.get(killmail_id)
+    except zkb.KillmailDoesNotExist as ex:
         logger.error("Aborting. %s", ex)
         return
 
@@ -154,8 +153,8 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
     try:
-        killmail = Killmail.get(killmail_id)
-    except KillmailDoesNotExist as exc:
+        killmail = zkb.Killmail.get(killmail_id)
+    except zkb.KillmailDoesNotExist as exc:
         logger.error("Aborting. %s", exc)
         return
     try:
@@ -189,8 +188,8 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
 def store_killmail(killmail_id: int) -> None:
     """Stores killmail as EveKillmail object."""
     try:
-        killmail = Killmail.get(killmail_id)
-    except KillmailDoesNotExist as ex:
+        killmail = zkb.Killmail.get(killmail_id)
+    except zkb.KillmailDoesNotExist as ex:
         logger.error("Aborting. %s", ex)
         return
     try:

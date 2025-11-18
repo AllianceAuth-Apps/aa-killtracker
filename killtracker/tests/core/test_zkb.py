@@ -20,6 +20,8 @@ from killtracker.core.zkb import (
     KillmailDoesNotExist,
     ZKBTooManyRequestsError,
     _EntityCount,
+    fetch_killmail_from_api,
+    fetch_killmail_from_redisq,
 )
 from killtracker.tests import CacheStub
 from killtracker.tests.testdata.factories import KillmailFactory
@@ -52,7 +54,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
             killmails_data()[10000001]["killmail"]
         )
         # when
-        killmail = Killmail.create_from_zkb_redisq()
+        killmail = fetch_killmail_from_redisq()
         # then
         self.assertIsNotNone(killmail)
         self.assertEqual(killmail.id, 10000001)
@@ -91,7 +93,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
             "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
         )
         # when
-        killmail = Killmail.create_from_zkb_redisq()
+        killmail = fetch_killmail_from_redisq()
         # then
         self.assertIsNone(killmail)
 
@@ -105,7 +107,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
             "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
         )
         # when
-        killmail = Killmail.create_from_zkb_redisq()
+        killmail = fetch_killmail_from_redisq()
         # then
         self.assertIsNone(killmail)
 
@@ -119,7 +121,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
             "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
         )
         # when
-        killmail = Killmail.create_from_zkb_redisq()
+        killmail = fetch_killmail_from_redisq()
         # then
         self.assertIsNone(killmail)
 
@@ -138,7 +140,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
             killmails_data()[10000001]["killmail"]
         )
         # when
-        killmail = Killmail.create_from_zkb_redisq()
+        killmail = fetch_killmail_from_redisq()
         # then
         self.assertIsNotNone(killmail)
 
@@ -149,7 +151,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         # given
         requests_mocker.register_uri("GET", _ZKB_REDISQ_URL, status_code=500)
         # when
-        killmail = Killmail.create_from_zkb_redisq()
+        killmail = fetch_killmail_from_redisq()
         # then
         self.assertIsNone(killmail)
 
@@ -163,7 +165,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         )
         # when/then
         with self.assertRaises(ZKBTooManyRequestsError):
-            Killmail.create_from_zkb_redisq()
+            fetch_killmail_from_redisq()
 
     @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_reraise_too_many_requests_error_when_ongoing(
@@ -176,7 +178,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         # when/then
         self.assertEqual(requests_mocker.call_count, 0)
         with self.assertRaises(ZKBTooManyRequestsError) as ex:
-            Killmail.create_from_zkb_redisq()
+            fetch_killmail_from_redisq()
         self.assertEqual(retry_at, ex.exception.retry_at)
 
     @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
@@ -193,7 +195,7 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
 You can only have one request to listen.php in flight at any time, otherwise you will generate a too many requests error (429). If you have too many of these errors you will be banned automatically.""",
         )
         # when
-        killmail = Killmail.create_from_zkb_redisq()
+        killmail = fetch_killmail_from_redisq()
         # then
         self.assertIsNone(killmail)
 
@@ -206,7 +208,7 @@ You can only have one request to listen.php in flight at any time, otherwise you
             "GET", _ZKB_REDISQ_URL, status_code=200, text="this is not JSON"
         )
         # when
-        killmail = Killmail.create_from_zkb_redisq()
+        killmail = fetch_killmail_from_redisq()
         # then
         self.assertIsNone(killmail)
 
@@ -219,7 +221,7 @@ You can only have one request to listen.php in flight at any time, otherwise you
             "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
         )
         # when
-        Killmail.create_from_zkb_redisq()
+        fetch_killmail_from_redisq()
         # then
         qs = requests_mocker.last_request.qs
         self.assertIn("queueID", qs)
@@ -237,7 +239,7 @@ You can only have one request to listen.php in flight at any time, otherwise you
         )
         # when/then
         with self.assertRaises(ImproperlyConfigured):
-            Killmail.create_from_zkb_redisq()
+            fetch_killmail_from_redisq()
 
     @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "Möchtegern")
     def test_should_urlize_queue_ids(self, requests_mocker, mock_esi, mock_cache):
@@ -246,7 +248,7 @@ You can only have one request to listen.php in flight at any time, otherwise you
             "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
         )
         # when
-        Killmail.create_from_zkb_redisq()
+        fetch_killmail_from_redisq()
         # then
         qs = requests_mocker.last_request.qs
         self.assertIn("queueID", qs)
@@ -264,7 +266,7 @@ You can only have one request to listen.php in flight at any time, otherwise you
         )
         # when/then
         with self.assertRaises(ImproperlyConfigured):
-            Killmail.create_from_zkb_redisq()
+            fetch_killmail_from_redisq()
 
     @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_wait_until_next_slot_if_needed(
@@ -277,7 +279,7 @@ You can only have one request to listen.php in flight at any time, otherwise you
         )
         # when
         with patch(MODULE_PATH + ".sleep") as mock_sleep:
-            killmail = Killmail.create_from_zkb_redisq()
+            killmail = fetch_killmail_from_redisq()
             # then
             self.assertIsNone(killmail)
             self.assertTrue(mock_sleep.called)
@@ -408,7 +410,7 @@ class TestCreateFromZkbApi(NoSocketsTestCase):
             killmail_data["killmail"]
         )
 
-        killmail = Killmail.create_from_zkb_api(killmail_id)
+        killmail = fetch_killmail_from_api(killmail_id)
         self.assertIsNotNone(killmail)
         self.assertEqual(killmail.id, killmail_id)
         self.assertAlmostEqual(killmail.time, now(), delta=dt.timedelta(seconds=120))

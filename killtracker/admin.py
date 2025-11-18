@@ -12,7 +12,7 @@ from django.utils.safestring import mark_safe
 from allianceauth import NAME as site_header
 
 from killtracker import tasks
-from killtracker.core.zkb import Killmail
+from killtracker.core import zkb
 from killtracker.forms import (
     TrackerAdminForm,
     TrackerAdminKillmailIdForm,
@@ -343,7 +343,7 @@ class TrackerAdmin(admin.ModelAdmin):
             form = TrackerAdminKillmailIdForm(request.POST)
             if form.is_valid():
                 killmail_id = form.cleaned_data["killmail_id"]
-                killmail = Killmail.create_from_zkb_api(killmail_id)
+                killmail = zkb.fetch_killmail_from_api(killmail_id)
                 if killmail:
                     request.session["last_killmail_id"] = killmail_id
                     actions_count = 0
