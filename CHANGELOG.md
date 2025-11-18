@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.2.0] - TBD
+
+## Changed
+
+- Killmails are now fetched from ESI instead of ZKB. (#55)
+
 ## [1.1.1] - 2025-11-13
 
 ### Update notes
