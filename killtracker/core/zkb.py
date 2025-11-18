@@ -17,7 +17,6 @@ from simplejson.errors import JSONDecodeError
 
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
-from django.utils.dateparse import parse_datetime
 from django.utils.timezone import now
 from eveuniverse.models import EveType
 
@@ -483,13 +482,22 @@ class Killmail(_KillmailBase):
             return None
 
         package_data = data["package"]
-        km = cls._create_from_dict(package_data)
-        if km is not None:
-            logger.info("ZKB returned killmail %d", km.id)
-        else:
-            logger.info("Failed to parse killmail from ZKB")
+        try:
+            killmail_id = package_data["killID"]
+            killmail_zkb = package_data["zkb"]
+        except KeyError:
+            logger.warning(
+                "Failed to parse response from ZKB: %s", package_data, exc_info=True
+            )
+            return None
 
-        return km
+        killmail = cls._create_from_esi(killmail_id, killmail_zkb)
+        if not killmail:
+            logger.info("Failed to parse killmail from ZKB")
+            return None
+
+        logger.info("ZKB returned killmail %d", killmail.id)
+        return killmail
 
     @classmethod
     def create_from_zkb_api(cls, killmail_id: int) -> Optional["Killmail"]:
@@ -502,80 +510,70 @@ class Killmail(_KillmailBase):
         if killmail_json:
             return Killmail.from_json(killmail_json)
 
-        logger.info(
-            "Trying to fetch killmail from ZKB API with killmail ID %d ...",
-            killmail_id,
-        )
         url = f"{_ZKB_API_URL}killID/{killmail_id}/"
         response = requests.get(
             url, timeout=_REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
         )
         response.raise_for_status()
-        zkb_data = response.json()
-        if not zkb_data:
+        data = response.json()
+        if not data:
             logger.warning(
                 "ZKB API did not return any data for killmail ID %d", killmail_id
             )
             return None
 
-        logger.debug("data:\n%s", zkb_data)
+        logger.info("Received killmail from ZKB API with ID %d", killmail_id)
+        logger.debug("data:\n%s", data)
         try:
-            killmail_zkb = zkb_data[0]
+            killmail_zkb = data[0]["zkb"]
         except KeyError:
             return None
 
-        killmail_esi = esi.client.Killmails.get_killmails_killmail_id_killmail_hash(
-            killmail_id=killmail_id, killmail_hash=killmail_zkb["zkb"]["hash"]
-        ).results()
-        if not killmail_esi:
-            logger.warning(
-                "ESI did not return any data for killmail ID %d", killmail_id
-            )
-            return None
-
-        # esi returns datetime, but _create_from_dict() expects a string in
-        # same format as returned from zkb redisq
-        killmail_esi["killmail_time"] = killmail_esi["killmail_time"].strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
-
-        killmail_dict = {
-            "killID": killmail_id,
-            "killmail": killmail_esi,
-            "zkb": killmail_zkb["zkb"],
-        }
-        killmail = cls._create_from_dict(killmail_dict)
+        killmail = cls._create_from_esi(killmail_id, killmail_zkb)
         if killmail:
             cache.set(key=cache_key, value=killmail.asjson())
         return killmail
 
     @classmethod
-    def _create_from_dict(cls, package_data: dict) -> Optional["Killmail"]:
-        """creates a new object from given dict.
-        Needs to confirm with data structure returned from ZKB RedisQ
+    def _create_from_esi(
+        cls, killmail_id: int, killmail_zkb: dict
+    ) -> Optional["Killmail"]:
+        killmail: dict = esi.client.Killmails.get_killmails_killmail_id_killmail_hash(
+            killmail_id=killmail_id,
+            killmail_hash=killmail_zkb["hash"],
+        ).results()
+        if not killmail:
+            logger.warning(
+                "ESI did not return any data for killmail ID %d", killmail_id
+            )
+            return None
+
+        return cls._create_from_dict(killmail_id, killmail, killmail_zkb)
+
+    @classmethod
+    def _create_from_dict(
+        cls, killmail_id: int, killmail_data: dict, killmail_zkb: dict
+    ) -> Optional["Killmail"]:
+        """Create a new Killmail from a dict.
+        Needs to conform with data structure returned from ZKB RedisQ
         """
 
-        killmail = None
-        if "killmail" in package_data:
-            killmail_data = package_data["killmail"]
-            victim, position = cls._extract_victim_and_position(killmail_data)
-            attackers = cls._extract_attackers(killmail_data)
-            zkb = cls._extract_zkb(package_data)
+        victim, position = cls._extract_victim_and_position(killmail_data)
+        attackers = cls._extract_attackers(killmail_data)
+        zkb = cls._extract_zkb(killmail_zkb)
 
-            params = {
-                "id": killmail_data["killmail_id"],
-                "time": parse_datetime(killmail_data["killmail_time"]),
-                "victim": victim,
-                "position": position,
-                "attackers": attackers,
-                "zkb": zkb,
-            }
-            if "solar_system_id" in killmail_data:
-                params["solar_system_id"] = killmail_data["solar_system_id"]
+        params = {
+            "id": killmail_id,
+            "time": killmail_data["killmail_time"],
+            "victim": victim,
+            "position": position,
+            "attackers": attackers,
+            "zkb": zkb,
+        }
+        if "solar_system_id" in killmail_data:
+            params["solar_system_id"] = killmail_data["solar_system_id"]
 
-            killmail = Killmail(**params)
-
-        return killmail
+        return Killmail(**params)
 
     @classmethod
     def _extract_victim_and_position(cls, killmail_data: dict):
@@ -620,11 +618,7 @@ class Killmail(_KillmailBase):
         return attackers
 
     @classmethod
-    def _extract_zkb(cls, package_data):
-        if "zkb" not in package_data:
-            return KillmailZkb()
-
-        zkb_data = package_data["zkb"]
+    def _extract_zkb(cls, data: dict):
         params = {}
         for prop, mapping in (
             ("locationID", "location_id"),
@@ -636,10 +630,10 @@ class Killmail(_KillmailBase):
             ("solo", "is_solo"),
             ("awox", "is_awox"),
         ):
-            if prop in zkb_data:
+            if prop in data:
                 if mapping:
-                    params[mapping] = zkb_data[prop]
+                    params[mapping] = data[prop]
                 else:
-                    params[prop] = zkb_data[prop]
+                    params[prop] = data[prop]
 
         return KillmailZkb(**params)

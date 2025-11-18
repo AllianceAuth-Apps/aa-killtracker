@@ -6,10 +6,10 @@ import requests_mock
 from django.core.cache import cache
 from django.test.utils import override_settings
 
+from app_utils.esi_testing import BravadoOperationStub
 from app_utils.testing import NoSocketsTestCase
 
 from killtracker import tasks
-from killtracker.core.zkb import _ZKB_REDISQ_URL
 
 from .testdata.factories import TrackerFactory, WebhookFactory
 from .testdata.helpers import (
@@ -17,6 +17,7 @@ from .testdata.helpers import (
     load_eve_corporations,
     load_eve_entities,
     load_eveuniverse,
+    redisq_data,
 )
 
 PACKAGE_PATH = "killtracker"
@@ -24,6 +25,7 @@ PACKAGE_PATH = "killtracker"
 
 @patch("celery.app.task.Context.called_directly", False)  # make retry work with eager
 @override_settings(CELERY_ALWAYS_EAGER=True)
+@patch(PACKAGE_PATH + ".core.zkb.esi")
 @patch(PACKAGE_PATH + ".core.zkb.KILLTRACKER_QUEUE_ID", "dummy")
 @patch(PACKAGE_PATH + ".tasks.workers.is_shutting_down", lambda x: False)
 @patch(PACKAGE_PATH + ".core.discord.dhooks_lite.Webhook.execute", spec=True)
@@ -46,19 +48,22 @@ class TestTasksEnd2End(NoSocketsTestCase):
     def setUp(self):
         cache.clear()
 
-    def test_normal_case(self, mock_execute, requests_mocker):
+    def test_normal_case(self, mock_execute, mock_esi, requests_mocker):
         # given
         mock_execute.return_value = dhooks_lite.WebhookResponse({}, status_code=200)
         requests_mocker.register_uri(
             "GET",
-            _ZKB_REDISQ_URL,
+            "https://zkillredisq.stream/listen.php",
             [
-                {"status_code": 200, "json": {"package": killmails_data()[10000001]}},
-                {"status_code": 200, "json": {"package": killmails_data()[10000002]}},
-                {"status_code": 200, "json": {"package": killmails_data()[10000003]}},
+                {"status_code": 200, "json": {"package": redisq_data()[10000001]}},
+                {"status_code": 200, "json": {"package": redisq_data()[10000002]}},
                 {"status_code": 200, "json": {"package": None}},
             ],
         )
+        mock_esi.client.Killmails.get_killmails_killmail_id_killmail_hash.side_effect = [
+            BravadoOperationStub(killmails_data()[10000001]["killmail"]),
+            BravadoOperationStub(killmails_data()[10000002]["killmail"]),
+        ]
         # when
         tasks.run_killtracker.delay()
         # then
