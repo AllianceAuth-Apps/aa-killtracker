@@ -41,7 +41,7 @@ def _load_killmails_data() -> dict:
     for obj in _load_json_from_file("killmails"):
         killmail_id = obj["killID"]
         obj["killmail"]["killmail_id"] = killmail_id
-        obj["killmail"]["killmail_time"] = dt.datetime.now(dt.UTC)
+        obj["killmail"]["killmail_time"] = dt.datetime.now(dt.timezone.utc)
         hash = md5(str(killmail_id).encode("utf8")).hexdigest()
         obj["zkb"]["hash"] = hash
         href = f"https://esi.evetech.net/v1/killmails/{killmail_id}/{hash}/"
