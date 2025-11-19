@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## Changed
 
 - Killmails are now fetched from ESI instead of ZKB. (#55)
+- Replaced local testing utils with app_utils
 
 ## [1.1.1] - 2025-11-13
 

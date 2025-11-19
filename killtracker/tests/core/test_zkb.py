@@ -1,4 +1,5 @@
 import datetime as dt
+import fnmatch
 import unittest
 from unittest.mock import patch
 
@@ -9,7 +10,7 @@ from django.test import TestCase
 from django.utils.timezone import now
 
 from app_utils.esi_testing import BravadoOperationStub
-from app_utils.testing import NoSocketsTestCase
+from app_utils.testing import CacheFake, NoSocketsTestCase
 
 from killtracker.core.zkb import (
     _KEY_LAST_REQUEST,
@@ -30,7 +31,6 @@ from killtracker.tests.testdata.helpers import (
     load_killmail,
     redisq_data,
 )
-from killtracker.tests.utils import CacheFake
 
 MODULE_PATH = "killtracker.core.zkb"
 unittest.util._MAX_LENGTH = 1000
@@ -441,7 +441,18 @@ class TestCreateFromZkbApi(NoSocketsTestCase):
         self.assertFalse(killmail.zkb.is_awox)
 
 
-@patch(MODULE_PATH + ".cache", new_callable=CacheFake)
+class CacheFake2(CacheFake):
+    def delete_pattern(self, pattern: str) -> None:
+        keys = []
+        for k in self._cache:
+            if fnmatch.fnmatch(k, pattern):
+                keys.append(k)
+        for k in keys:
+            self.delete(k)
+        return len(keys)
+
+
+@patch(MODULE_PATH + ".cache", new_callable=CacheFake2)
 class TestKillmailStorage(TestCase):
     def test_should_store_and_retrieve_killmail(self, mock_cache):
         # given
@@ -478,3 +489,18 @@ class TestKillmailStorage(TestCase):
         killmail_2 = Killmail.get(id=killmail_1.id)
         self.assertEqual(killmail_1.id, killmail_2.id)
         self.assertEqual(killmail_2.zkb.points, 2)
+
+    def test_should_delete_all_killmails(self, _):
+        # given
+        km1 = KillmailFactory()
+        km1.save()
+        km2 = KillmailFactory()
+        km2.save()
+        # when
+        got = Killmail.delete_all()
+        # then
+        self.assertEqual(got, 2)
+        with self.assertRaises(KillmailDoesNotExist):
+            Killmail.get(id=km1.id)
+        with self.assertRaises(KillmailDoesNotExist):
+            Killmail.get(id=km2.id)

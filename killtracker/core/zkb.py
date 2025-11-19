@@ -389,6 +389,11 @@ class Killmail(_KillmailBase):
         return cls.from_json(data)
 
     @classmethod
+    def delete_all(cls) -> int:
+        """Delete all killmails in storage and return how many were deleted."""
+        return cache.delete_pattern(f"{cls._STORAGE_BASE_KEY}*")
+
+    @classmethod
     def _storage_key(cls, id: int) -> str:
         return cls._STORAGE_BASE_KEY + str(id)
 

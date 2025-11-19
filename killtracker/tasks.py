@@ -192,6 +192,7 @@ def store_killmail(killmail_id: int) -> None:
     except zkb.KillmailDoesNotExist as ex:
         logger.error("Aborting. %s", ex)
         return
+
     try:
         EveKillmail.objects.create_from_killmail(killmail, resolve_ids=False)
     except IntegrityError:
