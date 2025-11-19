@@ -454,6 +454,12 @@ class Tracker(models.Model):
     require_npc_kills = models.BooleanField(
         default=False, help_text="Only include killmails that are npc kills."
     )
+    exclude_war_kills = models.BooleanField(
+        default=False, help_text="Exclude war kills."
+    )
+    require_war_kills = models.BooleanField(
+        default=False, help_text="Only include killmails that are war kills."
+    )
     webhook = models.ForeignKey(
         Webhook,
         on_delete=models.CASCADE,
@@ -521,7 +527,7 @@ class Tracker(models.Model):
         )
 
     def process_killmail(
-        self, killmail: Killmail, ignore_max_age: bool = False
+        self, km: Killmail, ignore_max_age: bool = False
     ) -> Optional[Killmail]:
         """Run tracker on a killmail and see if it matches
 
@@ -535,13 +541,13 @@ class Tracker(models.Model):
         threshold_date = now() - timedelta(
             minutes=KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER
         )
-        if not ignore_max_age and killmail.time < threshold_date:
+        if not ignore_max_age and km.time < threshold_date:
             return None
 
         # Make sure all ship types are in the local database
         if self.has_type_clause:
             EveType.objects.bulk_get_or_create_esi(  # type: ignore
-                ids=killmail.ship_type_distinct_ids()
+                ids=km.ship_type_distinct_ids()
             )
 
         # match against clauses
@@ -550,18 +556,19 @@ class Tracker(models.Model):
         jumps = None
         matching_ship_type_ids = []
         try:
-            is_matching = self._match_npc(killmail, is_matching)
-            is_matching = self._match_value(killmail, is_matching)
-            is_matching, jumps, distance = self._match_geography(killmail, is_matching)
-            is_matching = self._match_attackers(killmail, is_matching)
-            is_matching = self._match_states(killmail, is_matching)
+            is_matching = self._match_npc(km, is_matching)
+            is_matching = self._match_war(km, is_matching)
+            is_matching = self._match_value(km, is_matching)
+            is_matching, jumps, distance = self._match_geography(km, is_matching)
+            is_matching = self._match_attackers(km, is_matching)
+            is_matching = self._match_states(km, is_matching)
             is_matching, matching_ship_type_ids = self._match_attacker_ships(
-                killmail, is_matching, matching_ship_type_ids
+                km, is_matching, matching_ship_type_ids
             )
-            is_matching = self._match_attacker_weapons(killmail, is_matching)
-            is_matching = self._match_victims(killmail, is_matching)
+            is_matching = self._match_attacker_weapons(km, is_matching)
+            is_matching = self._match_victims(km, is_matching)
             is_matching, matching_ship_type_ids = self._match_victim_ship(
-                killmail, is_matching, matching_ship_type_ids
+                km, is_matching, matching_ship_type_ids
             )
 
         except AttributeError:
@@ -570,7 +577,7 @@ class Tracker(models.Model):
         if not is_matching:
             return None
 
-        killmail_new = killmail.clone_with_tracker_info(
+        killmail_new = km.clone_with_tracker_info(
             tracker_pk=self.pk,
             jumps=jumps,
             distance=distance,
@@ -578,35 +585,43 @@ class Tracker(models.Model):
         )
         return killmail_new
 
-    def _match_npc(self, killmail: Killmail, is_matching: bool) -> bool:
+    def _match_npc(self, km: Killmail, is_matching: bool) -> bool:
         if is_matching and self.exclude_npc_kills:
-            is_matching = not bool(killmail.zkb.is_npc)
+            is_matching = not bool(km.zkb.is_npc)
 
         if is_matching and self.require_npc_kills:
-            is_matching = bool(killmail.zkb.is_npc)
+            is_matching = bool(km.zkb.is_npc)
         return is_matching
 
-    def _match_value(self, killmail: Killmail, is_matching: bool) -> bool:
+    def _match_war(self, km: Killmail, is_matching: bool) -> bool:
+        if is_matching and self.exclude_war_kills:
+            is_matching = not km.is_war_kill()
+
+        if is_matching and self.require_war_kills:
+            is_matching = km.is_war_kill()
+        return is_matching
+
+    def _match_value(self, km: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_min_value:
             is_matching = (
-                killmail.zkb.total_value is not None
-                and killmail.zkb.total_value >= self.require_min_value * 1_000_000
+                km.zkb.total_value is not None
+                and km.zkb.total_value >= self.require_min_value * 1_000_000
             )
 
         return is_matching
 
     def _match_geography(
-        self, killmail: Killmail, is_matching: bool
+        self, km: Killmail, is_matching: bool
     ) -> Tuple[bool, Optional[int], Optional[float]]:
         if (
-            not killmail.solar_system_id
+            not km.solar_system_id
             or not self.origin_solar_system
             and not self.has_localization_clause
         ):
             return is_matching, None, None
 
         solar_system: EveSolarSystem = EveSolarSystem.objects.get_or_create_esi(  # type: ignore
-            id=killmail.solar_system_id
+            id=km.solar_system_id
         )[
             0
         ]
@@ -673,36 +688,36 @@ class Tracker(models.Model):
             jumps = None
         return (jumps, distance)
 
-    def _match_attackers(self, killmail: Killmail, is_matching: bool) -> bool:
+    def _match_attackers(self, km: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_min_attackers:
-            is_matching = len(killmail.attackers) >= self.require_min_attackers
+            is_matching = len(km.attackers) >= self.require_min_attackers
 
         if is_matching and self.require_max_attackers:
-            is_matching = len(killmail.attackers) <= self.require_max_attackers
+            is_matching = len(km.attackers) <= self.require_max_attackers
 
         if is_matching and self.exclude_attacker_alliances.exists():
             is_matching = self.exclude_attacker_alliances.exclude(
-                alliance_id__in=killmail.attackers_distinct_alliance_ids()
+                alliance_id__in=km.attackers_distinct_alliance_ids()
             ).exists()
 
         if is_matching and self.exclude_attacker_corporations.exists():
             is_matching = self.exclude_attacker_corporations.exclude(
-                corporation_id__in=killmail.attackers_distinct_corporation_ids()
+                corporation_id__in=km.attackers_distinct_corporation_ids()
             ).exists()
 
         if is_matching and self.require_attacker_factions.exists():
             is_matching = self.require_attacker_factions.filter(
-                faction_id__in=killmail.attackers_distinct_faction_ids()
+                faction_id__in=km.attackers_distinct_faction_ids()
             ).exists()
 
         if is_matching and self.exclude_attacker_factions.exists():
             is_matching = self.exclude_attacker_factions.exclude(
-                faction_id__in=killmail.attackers_distinct_faction_ids()
+                faction_id__in=km.attackers_distinct_faction_ids()
             ).exists()
 
         if is_matching:
             if self.require_attacker_organizations_final_blow:
-                attacker_final_blow = killmail.attacker_final_blow()
+                attacker_final_blow = km.attacker_final_blow()
                 is_matching = bool(attacker_final_blow) and (
                     (
                         bool(attacker_final_blow.alliance_id)
@@ -720,21 +735,21 @@ class Tracker(models.Model):
             else:
                 if is_matching and self.require_attacker_alliances.exists():
                     is_matching = self.require_attacker_alliances.filter(
-                        alliance_id__in=killmail.attackers_distinct_alliance_ids()
+                        alliance_id__in=km.attackers_distinct_alliance_ids()
                     ).exists()
                 if is_matching and self.require_attacker_corporations.exists():
                     is_matching = self.require_attacker_corporations.filter(
-                        corporation_id__in=killmail.attackers_distinct_corporation_ids()
+                        corporation_id__in=km.attackers_distinct_corporation_ids()
                     ).exists()
 
         return is_matching
 
-    def _match_states(self, killmail: Killmail, is_matching: bool) -> bool:
+    def _match_states(self, km: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_attacker_states.exists():
             is_matching = User.objects.filter(
                 profile__state__in=list(self.require_attacker_states.all()),
                 character_ownerships__character__character_id__in=(
-                    killmail.attackers_distinct_character_ids()
+                    km.attackers_distinct_character_ids()
                 ),
             ).exists()
 
@@ -742,26 +757,24 @@ class Tracker(models.Model):
             is_matching = not User.objects.filter(
                 profile__state__in=list(self.exclude_attacker_states.all()),
                 character_ownerships__character__character_id__in=(
-                    killmail.attackers_distinct_character_ids()
+                    km.attackers_distinct_character_ids()
                 ),
             ).exists()
 
         if is_matching and self.require_victim_states.exists():
             is_matching = User.objects.filter(
                 profile__state__in=list(self.require_victim_states.all()),
-                character_ownerships__character__character_id=(
-                    killmail.victim.character_id
-                ),
+                character_ownerships__character__character_id=(km.victim.character_id),
             ).exists()
 
         return is_matching
 
     def _match_attacker_ships(
-        self, killmail: Killmail, is_matching: bool, matching_ship_type_ids: List[int]
+        self, km: Killmail, is_matching: bool, matching_ship_type_ids: List[int]
     ) -> Tuple[bool, List[int]]:
         if is_matching and self.require_attackers_ship_groups.exists():
             ship_types_matching_qs = EveType.objects.filter(
-                id__in=set(killmail.attackers_ship_type_ids())
+                id__in=set(km.attackers_ship_type_ids())
             ).filter(
                 eve_group_id__in=list(
                     self.require_attackers_ship_groups.values_list("id", flat=True)
@@ -775,7 +788,7 @@ class Tracker(models.Model):
 
         if is_matching and self.require_attackers_ship_types.exists():
             ship_types_matching_qs = EveType.objects.filter(
-                id__in=set(killmail.attackers_ship_type_ids())
+                id__in=set(km.attackers_ship_type_ids())
             ).filter(
                 id__in=list(
                     self.require_attackers_ship_types.values_list("id", flat=True)
@@ -790,11 +803,11 @@ class Tracker(models.Model):
         return is_matching, matching_ship_type_ids
 
     def _match_attacker_weapons(
-        self, killmail: Killmail, is_matching: bool
+        self, km: Killmail, is_matching: bool
     ) -> Tuple[bool, List[int]]:
         if is_matching and self.require_attackers_weapon_groups.exists():
             weapon_types_matching_qs = EveType.objects.filter(
-                id__in=set(killmail.attackers_weapon_type_ids())
+                id__in=set(km.attackers_weapon_type_ids())
             ).filter(
                 eve_group_id__in=list(
                     self.require_attackers_weapon_groups.values_list("id", flat=True)
@@ -804,7 +817,7 @@ class Tracker(models.Model):
 
         if is_matching and self.require_attackers_weapon_types.exists():
             weapon_types_matching_qs = EveType.objects.filter(
-                id__in=set(killmail.attackers_weapon_type_ids())
+                id__in=set(km.attackers_weapon_type_ids())
             ).filter(
                 id__in=list(
                     self.require_attackers_weapon_types.values_list("id", flat=True)
@@ -814,48 +827,48 @@ class Tracker(models.Model):
 
         return is_matching
 
-    def _match_victims(self, killmail: Killmail, is_matching: bool) -> bool:
+    def _match_victims(self, km: Killmail, is_matching: bool) -> bool:
         if is_matching and self.require_victim_alliances.exists():
             is_matching = self.require_victim_alliances.filter(
-                alliance_id=killmail.victim.alliance_id
+                alliance_id=km.victim.alliance_id
             ).exists()
 
         if is_matching and self.exclude_victim_alliances.exists():
             is_matching = self.exclude_victim_alliances.exclude(
-                alliance_id=killmail.victim.alliance_id
+                alliance_id=km.victim.alliance_id
             ).exists()
 
         if is_matching and self.require_victim_corporations.exists():
             is_matching = self.require_victim_corporations.filter(
-                corporation_id=killmail.victim.corporation_id
+                corporation_id=km.victim.corporation_id
             ).exists()
 
         if is_matching and self.exclude_victim_corporations.exists():
             is_matching = self.exclude_victim_corporations.exclude(
-                corporation_id=killmail.victim.corporation_id
+                corporation_id=km.victim.corporation_id
             ).exists()
 
         if is_matching and self.require_victim_factions.exists():
             is_matching = self.require_victim_factions.filter(
-                faction_id=killmail.victim.faction_id
+                faction_id=km.victim.faction_id
             ).exists()
 
         if is_matching and self.exclude_victim_factions.exists():
             is_matching = self.exclude_victim_factions.exclude(
-                faction_id=killmail.victim.faction_id
+                faction_id=km.victim.faction_id
             ).exists()
 
         return is_matching
 
     def _match_victim_ship(
-        self, killmail: Killmail, is_matching: bool, matching_ship_type_ids: List[int]
+        self, km: Killmail, is_matching: bool, matching_ship_type_ids: List[int]
     ) -> Tuple[bool, List[int]]:
         if is_matching and self.require_victim_ship_groups.exists():
             ship_types_matching_qs = EveType.objects.filter(
                 eve_group_id__in=list(
                     self.require_victim_ship_groups.values_list("id", flat=True)
                 ),
-                id=killmail.victim.ship_type_id,
+                id=km.victim.ship_type_id,
             )
             is_matching = ship_types_matching_qs.exists()
             if is_matching:
@@ -868,7 +881,7 @@ class Tracker(models.Model):
                 id__in=list(
                     self.require_victim_ship_types.values_list("id", flat=True)
                 ),
-                id=killmail.victim.ship_type_id,
+                id=km.victim.ship_type_id,
             )
             is_matching = ship_types_matching_qs.exists()
             if is_matching:
@@ -879,11 +892,11 @@ class Tracker(models.Model):
         return is_matching, matching_ship_type_ids
 
     def generate_killmail_message(
-        self, killmail: Killmail, intro_text: Optional[str] = None
+        self, km: Killmail, intro_text: Optional[str] = None
     ) -> int:
         """Generate a message from given killmail and enqueue for later sending.
 
         Returns the new queue size.
         """
-        message = create_discord_message_from_killmail(self, killmail, intro_text)
+        message = create_discord_message_from_killmail(self, km, intro_text)
         return self.webhook.enqueue_message(message)

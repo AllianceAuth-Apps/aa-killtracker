@@ -195,12 +195,15 @@ class TrackerAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "Fleet detection",
+            "Ship & Weapon types",
             {
                 "fields": (
-                    "require_min_attackers",
-                    "require_max_attackers",
-                    "identify_fleets",
+                    "require_attackers_ship_groups",
+                    "require_attackers_ship_types",
+                    "require_attackers_weapon_groups",
+                    "require_attackers_weapon_types",
+                    "require_victim_ship_groups",
+                    "require_victim_ship_types",
                 ),
             },
         ),
@@ -211,19 +214,18 @@ class TrackerAdmin(admin.ModelAdmin):
                     "require_min_value",
                     "exclude_npc_kills",
                     "require_npc_kills",
+                    "exclude_war_kills",
+                    "require_war_kills",
                 ),
             },
         ),
         (
-            "Ship & Weapon types",
+            "Fleet detection",
             {
                 "fields": (
-                    "require_attackers_ship_groups",
-                    "require_attackers_ship_types",
-                    "require_attackers_weapon_groups",
-                    "require_attackers_weapon_types",
-                    "require_victim_ship_groups",
-                    "require_victim_ship_types",
+                    "require_min_attackers",
+                    "require_max_attackers",
+                    "identify_fleets",
                 ),
             },
         ),
@@ -306,6 +308,8 @@ class TrackerAdmin(admin.ModelAdmin):
             ("require_victim_ship_types", self._add_to_clauses_2),
             ("exclude_npc_kills", self._add_to_clauses_1),
             ("require_npc_kills", self._add_to_clauses_1),
+            ("exclude_war_kills", self._add_to_clauses_1),
+            ("require_war_kills", self._add_to_clauses_1),
         ]:
             func(clauses, obj, field)
         return mark_safe("<br>".join(clauses)) if clauses else None

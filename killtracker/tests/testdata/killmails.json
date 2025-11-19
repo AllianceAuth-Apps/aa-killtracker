@@ -40,6 +40,8 @@
             "killmail_id": null,
             "killmail_time": null,
             "solar_system_id": 30004984,
+            "moon_id": 40000001,
+            "war_id": 666,
             "victim": {
                 "alliance_id": 3011,
                 "character_id": 1011,

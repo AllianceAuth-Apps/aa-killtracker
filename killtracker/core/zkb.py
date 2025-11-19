@@ -48,9 +48,6 @@ _ZKB_REDISQ_URL = "https://zkillredisq.stream/listen.php"
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-# TODO: Factor out logic for accessing the API to another module
-
-
 class ZKBTooManyRequestsError(Exception):
     """ZKB RedisQ API has returned 429 Too Many Requests HTTP status code."""
 
@@ -180,6 +177,8 @@ class Killmail(_KillmailBase):
     position: KillmailPosition
     zkb: KillmailZkb
     solar_system_id: Optional[int] = None
+    moon_id: Optional[int] = None
+    war_id: Optional[int] = None
     tracker_info: Optional[TrackerInfo] = None
 
     def __repr__(self):
@@ -208,6 +207,9 @@ class Killmail(_KillmailBase):
     def attackers_weapon_type_ids(self) -> List[int]:
         """Returns weapon type IDs of all attackers with duplicates."""
         return [obj.weapon_type_id for obj in self.attackers if obj.weapon_type_id]
+
+    def is_war_kill(self) -> bool:
+        return self.war_id is not None
 
     def entity_ids(self) -> Set[int]:
         """Return distinct IDs of all entities (excluding None)."""
@@ -431,6 +433,10 @@ class Killmail(_KillmailBase):
         }
         if "solar_system_id" in killmail_data:
             params["solar_system_id"] = killmail_data["solar_system_id"]
+        if "moon_id" in killmail_data:
+            params["moon_id"] = killmail_data["moon_id"]
+        if "war_id" in killmail_data:
+            params["war_id"] = killmail_data["war_id"]
 
         return Killmail(**params)
 
