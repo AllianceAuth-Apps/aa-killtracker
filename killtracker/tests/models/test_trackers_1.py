@@ -315,6 +315,20 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
         # then
         self.assertSetEqual(results, {10000003, 10000004})
 
+    def test_can_exclude_war_kills(self):
+        killmail_ids = {10000001, 10000002, 10000003, 10000004, 10000005, 10000301}
+        tracker = TrackerFactory(webhook=self.webhook_1, exclude_war_kills=True)
+        results = self._matching_killmail_ids(tracker, killmail_ids)
+        expected = {10000002, 10000003, 10000004, 10000005, 10000301}
+        self.assertSetEqual(results, expected)
+
+    def test_can_require_war_kills(self):
+        killmail_ids = {10000001, 10000002, 10000003, 10000004, 10000005, 10000301}
+        tracker = TrackerFactory(webhook=self.webhook_1, require_war_kills=True)
+        results = self._matching_killmail_ids(tracker, killmail_ids)
+        expected = {10000001}
+        self.assertSetEqual(results, expected)
+
 
 class TestTrackerCalculate2(LoadTestDataMixin, NoSocketsTestCase):
     def test_should_deny_when_value_is_below_minimum(self):

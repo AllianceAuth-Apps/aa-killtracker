@@ -62,9 +62,9 @@ def run_killtracker(self: Task) -> int:
             logger.debug("Aborting due to worker shutdown")
             break
 
-        killmail = None
+        km = None
         try:
-            killmail = zkb.fetch_killmail_from_redisq()
+            km = zkb.fetch_killmail_from_redisq()
         except zkb.ZKBTooManyRequestsError as exc:
             seconds = (exc.retry_at - now()).total_seconds()
             if seconds < 0:
@@ -75,17 +75,17 @@ def run_killtracker(self: Task) -> int:
             )
             raise self.retry(countdown=seconds, exc=exc)
 
-        if not killmail:
+        if not km:
             break
 
         killmails_count += 1
-        killmail.save()
+        km.save()
         for tracker in Tracker.objects.filter(is_enabled=True):
-            run_tracker.delay(tracker_pk=tracker.pk, killmail_id=killmail.id)
+            run_tracker.delay(tracker_pk=tracker.pk, killmail_id=km.id)
 
         if KILLTRACKER_STORING_KILLMAILS_ENABLED:
             chain(
-                store_killmail.si(killmail.id),
+                store_killmail.si(km.id),
                 update_unresolved_eve_entities.si(),
             ).delay()
 
@@ -121,19 +121,17 @@ def run_tracker(
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
     try:
-        killmail = zkb.Killmail.get(killmail_id)
+        km = zkb.Killmail.get(killmail_id)
     except zkb.KillmailDoesNotExist as ex:
         logger.error("Aborting. %s", ex)
         return
 
     with retry_task_on_esi_error_and_offline(self, "killtracker.tasks.run_tracker"):
-        killmail_new = tracker.process_killmail(
-            killmail=killmail, ignore_max_age=ignore_max_age
-        )
+        km_2 = tracker.process_killmail(km=km, ignore_max_age=ignore_max_age)
 
-    if killmail_new:
+    if km_2:
         logger.info("%s: Killmail %d matches", tracker, killmail_id)
-        killmail_new.save()
+        km_2.save()
         generate_killmail_message.delay(tracker_pk=tracker_pk, killmail_id=killmail_id)
     elif tracker.webhook.messages_queued():
         send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
@@ -153,18 +151,18 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
         timeout=KILLTRACKER_TASK_OBJECTS_CACHE_TIMEOUT,
     )
     try:
-        killmail = zkb.Killmail.get(killmail_id)
+        km = zkb.Killmail.get(killmail_id)
     except zkb.KillmailDoesNotExist as exc:
         logger.error("Aborting. %s", exc)
         return
     try:
-        tracker.generate_killmail_message(killmail)
+        tracker.generate_killmail_message(km)
     except Exception as exc:
         will_retry = self.request.retries < KILLTRACKER_GENERATE_MESSAGE_MAX_RETRIES
         logger.warning(
             "%s: Failed to generate killmail %s.%s",
             tracker,
-            killmail.id,
+            km.id,
             " Will retry." if will_retry else "",
             exc_info=True,
         )
@@ -175,9 +173,7 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
         )
 
     send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
-    logger.info(
-        "%s: Added message from killmail %s to send queue", tracker, killmail.id
-    )
+    logger.info("%s: Added message from killmail %s to send queue", tracker, km.id)
 
 
 @shared_task(
@@ -188,19 +184,17 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
 def store_killmail(killmail_id: int) -> None:
     """Stores killmail as EveKillmail object."""
     try:
-        killmail = zkb.Killmail.get(killmail_id)
+        km = zkb.Killmail.get(killmail_id)
     except zkb.KillmailDoesNotExist as ex:
         logger.error("Aborting. %s", ex)
         return
 
     try:
-        EveKillmail.objects.create_from_killmail(killmail, resolve_ids=False)
+        EveKillmail.objects.create_from_killmail(km, resolve_ids=False)
     except IntegrityError:
-        logger.warning(
-            "%s: Failed to store killmail, because it already exists", killmail.id
-        )
+        logger.warning("%s: Failed to store killmail, because it already exists", km.id)
     else:
-        logger.info("%s: Stored killmail", killmail.id)
+        logger.info("%s: Stored killmail", km.id)
 
 
 @shared_task(base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)
