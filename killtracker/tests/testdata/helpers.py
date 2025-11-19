@@ -115,10 +115,10 @@ def load_eve_killmails(killmail_ids: set = None) -> None:
     EveKillmail.objects.all().delete()
     for killmail_id, item in _killmails_data.items():
         if not killmail_ids or killmail_id in killmail_ids:
-            killmail = Killmail.create_from_zkb_data(
+            km = Killmail.create_from_zkb_data(
                 killmail_id, item["killmail"], item["zkb"]
             )
-            EveKillmail.objects.create_from_killmail(killmail)
+            EveKillmail.objects.create_from_killmail(km)
 
 
 def load_killmail(killmail_id: int) -> Killmail:

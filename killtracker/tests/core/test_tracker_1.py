@@ -26,57 +26,55 @@ class TestCreateEmbed(NoSocketsTestCase):
     def test_should_create_normal_embed(self):
         # given
         tracker = TrackerFactory()
-        killmail = KillmailFactory()
+        km = KillmailFactory()
         # when
-        embed = _create_embed(tracker, killmail)
+        embed = _create_embed(tracker, km)
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
 
     def test_should_create_normal_for_killmail_without_value(self):
         # given
         tracker = TrackerFactory()
-        killmail = KillmailFactory(zkb__total_value=None)
+        km = KillmailFactory(zkb__total_value=None)
         # when
-        embed = _create_embed(tracker, killmail)
+        embed = _create_embed(tracker, km)
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
 
     def test_should_create_embed_without_victim_alliance(self):
         # given
         tracker = TrackerFactory()
-        killmail = KillmailFactory(victim__alliance_id=None)
+        km = KillmailFactory(victim__alliance_id=None)
         # when
-        embed = _create_embed(tracker, killmail)
+        embed = _create_embed(tracker, km)
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
 
     def test_should_create_embed_without_victim_alliance_and_corporation(self):
         # given
         tracker = TrackerFactory()
-        killmail = KillmailFactory(
-            victim__alliance_id=None, victim__corporation_id=None
-        )
+        km = KillmailFactory(victim__alliance_id=None, victim__corporation_id=None)
         # when
-        embed = _create_embed(tracker, killmail)
+        embed = _create_embed(tracker, km)
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
 
     def test_should_create_embed_without_final_attacker(self):
         # given
         tracker = TrackerFactory()
-        killmail = KillmailFactory()
-        killmail.attackers.remove(killmail.attacker_final_blow())
+        km = KillmailFactory()
+        km.attackers.remove(km.attacker_final_blow())
         # when
-        embed = _create_embed(tracker, killmail)
+        embed = _create_embed(tracker, km)
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
 
     def test_should_create_embed_with_minimum_tracker_info(self):
         # given
         tracker = TrackerFactory()
-        killmail = KillmailFactory().clone_with_tracker_info(tracker.pk)
+        km = KillmailFactory().clone_with_tracker_info(tracker.pk)
         # when
-        embed = _create_embed(tracker, killmail)
+        embed = _create_embed(tracker, km)
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
 
@@ -84,11 +82,11 @@ class TestCreateEmbed(NoSocketsTestCase):
         # given
         tracker = TrackerFactory()
         ship_type = random_eve_entity(EveEntityVariant.SHIP_TYPE)
-        killmail = KillmailFactory().clone_with_tracker_info(
+        km = KillmailFactory().clone_with_tracker_info(
             tracker.pk, jumps=3, distance=3.5, matching_ship_type_ids=[ship_type.id]
         )
         # when
-        embed = _create_embed(tracker, killmail)
+        embed = _create_embed(tracker, km)
         # then
         self.assertIsInstance(embed, dhooks_lite.Embed)
 

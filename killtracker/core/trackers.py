@@ -128,11 +128,11 @@ def _import_discord_user():
     return DiscordUser
 
 
-def _create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
+def _create_embed(tracker: Tracker, km: Killmail) -> dhooks_lite.Embed:
     """Create Discord embed for a killmail."""
 
     resolver: EveEntityNameResolver = EveEntity.objects.bulk_resolve_names(  # type: ignore
-        ids=killmail.entity_ids()
+        ids=km.entity_ids()
     )
 
     # self info
@@ -140,27 +140,22 @@ def _create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
     main_org = _MainOrgInfo()
     main_ship_group_text = ""
     tracked_ship_types_text = ""
+    if km.tracker_info:
+        distance_text = _calc_distance(tracker, km.tracker_info)
+        main_org = _calc_main_group(tracker, km.tracker_info, resolver)
+        main_ship_group_text = _calc_main_ship_group(km.tracker_info)
+        tracked_ship_types_text = _calc_tracked_ship_types(km.tracker_info, resolver)
 
-    if killmail.tracker_info:
-        distance_text = _calc_distance(tracker, killmail.tracker_info)
-        main_org = _calc_main_group(tracker, killmail.tracker_info, resolver)
-        main_ship_group_text = _calc_main_ship_group(killmail.tracker_info)
-        tracked_ship_types_text = _calc_tracked_ship_types(
-            killmail.tracker_info, resolver
-        )
-
-    victim = _calc_victim(tracker, killmail, resolver)
-    description = _calc_description(
-        tracker,
-        killmail,
-        resolver,
-        distance_text,
-        main_org,
-        main_ship_group_text,
-        tracked_ship_types_text,
-        victim,
+    victim = _calc_victim(tracker, km, resolver)
+    description = _calc_description(tracker, km, resolver, main_org, victim)
+    description = (
+        f"{description}"
+        f"{main_ship_group_text}"
+        f"{tracked_ship_types_text}"
+        f"{distance_text}"
     )
-    title = _calc_title(killmail, resolver, main_org, victim)
+
+    title = _calc_title(km, resolver, main_org, victim)
     thumbnail_url = _calc_thumbnail_url(victim, main_org)
 
     author = _calc_author(victim)
@@ -171,10 +166,10 @@ def _create_embed(tracker: Tracker, killmail: Killmail) -> dhooks_lite.Embed:
         author=author,
         description=description,
         title=title,
-        url=f"{ZKB_KILLMAIL_BASEURL}{killmail.id}/",
+        url=f"{ZKB_KILLMAIL_BASEURL}{km.id}/",
         thumbnail=dhooks_lite.Thumbnail(url=thumbnail_url),
         footer=dhooks_lite.Footer(text="zKillboard", icon_url=zkb_icon_url),
-        timestamp=killmail.time,
+        timestamp=km.time,
         color=embed_color,
     )
     return embed
@@ -195,30 +190,23 @@ def _calc_author(victim: _VictimInfo):
 
 def _calc_description(
     tracker: Tracker,
-    killmail: Killmail,
+    km: Killmail,
     resolver: EveEntityNameResolver,
-    distance_text: str,
     main_org: _MainOrgInfo,
-    main_ship_group_text: str,
-    tracked_ship_types_text: str,
     victim: _VictimInfo,
 ):
-    solar_system_text = _calc_solar_system(tracker, killmail)
-    total_value = (
-        humanize_value(killmail.zkb.total_value) if killmail.zkb.total_value else "?"
-    )
-    final_attacker = _calc_final_attacker(tracker, killmail, resolver)
+    solar_system_text = _calc_solar_system(tracker, km)
+    total_value = humanize_value(km.zkb.total_value) if km.zkb.total_value else "?"
+    final_attacker = _calc_final_attacker(tracker, km, resolver)
+    war_kill = " This is a war kill." if km.is_war_kill() else ""
 
     description = (
         f"{victim.name} lost their **{victim.ship_type}** "
         f"in {solar_system_text} "
-        f"worth **{total_value}** ISK.\n"
+        f"worth **{total_value}** ISK.{war_kill}\n"
         f"Final blow by {final_attacker.name} "
         f"in a **{final_attacker.ship_type}**.\n"
-        f"Attackers: **{len(killmail.attackers):,}**{main_org.text}"
-        f"{main_ship_group_text}"
-        f"{tracked_ship_types_text}"
-        f"{distance_text}"
+        f"Attackers: **{len(km.attackers):,}**{main_org.text}"
     )
 
     return description

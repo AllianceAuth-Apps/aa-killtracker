@@ -347,12 +347,12 @@ class TrackerAdmin(admin.ModelAdmin):
             form = TrackerAdminKillmailIdForm(request.POST)
             if form.is_valid():
                 killmail_id = form.cleaned_data["killmail_id"]
-                killmail = zkb.fetch_killmail_from_api(killmail_id)
-                if killmail:
+                km = zkb.fetch_killmail_from_api(killmail_id)
+                if km:
                     request.session["last_killmail_id"] = killmail_id
                     actions_count = 0
                     for tracker in queryset:
-                        killmail.save()
+                        km.save()
                         tasks.run_tracker.delay(
                             tracker_pk=tracker.pk,
                             killmail_id=killmail_id,
