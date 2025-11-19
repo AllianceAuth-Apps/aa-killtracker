@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [1.2.0] - TBD
+## [1.2.0] - 2025-11-19
+
+## Added
+
+- Ability to exclude or require war kills in trackers (#56)
+- Add war kill info to messages on Discord
 
 ## Changed
 

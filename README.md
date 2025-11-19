@@ -186,6 +186,8 @@ exclude w space|exclude killmails from WH space
 require min value|Require killmail's value to be greater or equal to the given value in M ISK
 exclude npc kills|exclude npc kills
 require npc kills|only include killmails that are npc kills
+exclude war kills|exclude war kills
+require war kills|only include killmails that are war kills
 exclude attacker alliances|exclude killmails with attackers from one of these alliances
 exclude attacker corporations|exclude killmails with attackers from one of these corporations
 require attacker alliances|only include killmails with attackers from one of these alliances
