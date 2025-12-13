@@ -432,12 +432,12 @@ class Killmail(_KillmailBase):
             "attackers": attackers,
             "zkb": zkb,
         }
-        if "solar_system_id" in killmail_data:
-            params["solar_system_id"] = killmail_data["solar_system_id"]
-        if "moon_id" in killmail_data:
-            params["moon_id"] = killmail_data["moon_id"]
-        if "war_id" in killmail_data:
-            params["war_id"] = killmail_data["war_id"]
+        if v := killmail_data.get("solar_system_id"):
+            params["solar_system_id"] = v
+        if v := killmail_data.get("moon_id"):
+            params["moon_id"] = v
+        if v := killmail_data.get("war_id"):
+            params["war_id"] = v
 
         return Killmail(**params)
 
@@ -445,8 +445,7 @@ class Killmail(_KillmailBase):
     def _extract_victim_and_position(cls, killmail_data: dict):
         victim = KillmailVictim()
         position = KillmailPosition()
-        if "victim" in killmail_data:
-            victim_data = killmail_data["victim"]
+        if victim_data := killmail_data["victim"]:
             params = {}
             for prop in KillmailVictim.ENTITY_PROPS + ["damage_taken"]:
                 if prop in victim_data:
@@ -454,8 +453,7 @@ class Killmail(_KillmailBase):
 
             victim = KillmailVictim(**params)
 
-            if "position" in victim_data:
-                position_data = victim_data["position"]
+            if position_data := victim_data.get("position"):
                 params = {}
                 for prop in ["x", "y", "z"]:
                     if prop in position_data:
@@ -477,8 +475,8 @@ class Killmail(_KillmailBase):
                 if prop in attacker_data:
                     params[prop] = attacker_data[prop]
 
-            if "final_blow" in attacker_data:
-                params["is_final_blow"] = attacker_data["final_blow"]
+            if v := attacker_data["final_blow"]:
+                params["is_final_blow"] = v
 
             attackers.append(KillmailAttacker(**params))
         return attackers
@@ -496,11 +494,11 @@ class Killmail(_KillmailBase):
             ("solo", "is_solo"),
             ("awox", "is_awox"),
         ):
-            if prop in data:
+            if v := data.get(prop):
                 if mapping:
-                    params[mapping] = data[prop]
+                    params[mapping] = v
                 else:
-                    params[prop] = data[prop]
+                    params[prop] = v
 
         return KillmailZkb(**params)
 
