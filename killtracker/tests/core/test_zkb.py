@@ -128,25 +128,6 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         self.assertIsNone(killmail)
 
     @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
-    def test_should_handle_zkb_data_has_no_solar_system(
-        self, requests_mocker, mock_esi, mock_cache
-    ):
-        # given
-        requests_mocker.register_uri(
-            "GET",
-            _ZKB_REDISQ_URL,
-            status_code=200,
-            json={"package": redisq_data()[10000402]},
-        )
-        mock_esi.client.Killmails.get_killmails_killmail_id_killmail_hash.return_value = BravadoOperationStub(
-            killmails_data()[10000001]["killmail"]
-        )
-        # when
-        killmail = fetch_killmail_from_redisq()
-        # then
-        self.assertIsNotNone(killmail)
-
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_return_none_when_http_error(
         self, requests_mocker, mock_esi, mock_cache
     ):
@@ -506,3 +487,186 @@ class TestKillmailStorage(TestCase):
             Killmail.get(id=km1.id)
         with self.assertRaises(KillmailDoesNotExist):
             Killmail.get(id=km2.id)
+
+
+class TestKillmailCreateFromZkbData(TestCase):
+    def test_can_create_from_complete_data(self):
+        km = Killmail.create_from_zkb_data(
+            42,
+            {
+                "attackers": [
+                    {
+                        "alliance_id": 3001,
+                        "character_id": 1001,
+                        "corporation_id": 2001,
+                        "faction_id": 500001,
+                        "damage_done": 434,
+                        "final_blow": True,
+                        "security_status": -10,
+                        "ship_type_id": 34562,
+                        "weapon_type_id": 2977,
+                    },
+                    {
+                        "alliance_id": 3001,
+                        "character_id": 1002,
+                        "corporation_id": 2001,
+                        "faction_id": 500001,
+                        "damage_done": 50,
+                        "final_blow": False,
+                        "security_status": -10,
+                        "ship_type_id": 3756,
+                        "weapon_type_id": 2488,
+                    },
+                ],
+                "killmail_id": None,
+                "killmail_time": None,
+                "solar_system_id": 30004984,
+                "moon_id": 40000001,
+                "war_id": 666,
+                "victim": {
+                    "alliance_id": 3011,
+                    "character_id": 1011,
+                    "corporation_id": 2011,
+                    "faction_id": 500004,
+                    "damage_taken": 434,
+                    "items": [],
+                    "position": {
+                        "x": -1090788346073.3304,
+                        "y": 215361914442.54877,
+                        "z": -22223971337.631683,
+                    },
+                    "ship_type_id": 603,
+                },
+            },
+            {
+                "locationID": 50012306,
+                "hash": "low sec kill",
+                "fittedValue": 10000,
+                "totalValue": 10000,
+                "points": 1,
+                "npc": False,
+                "solo": False,
+                "awox": False,
+                "href": "",
+            },
+        )
+        self.assertEqual(km.id, 42)
+
+    def test_can_create_when_victim_position_missing(self):
+        km = Killmail.create_from_zkb_data(
+            42,
+            {
+                "attackers": [
+                    {
+                        "alliance_id": 3001,
+                        "character_id": 1001,
+                        "corporation_id": 2001,
+                        "faction_id": 500001,
+                        "damage_done": 434,
+                        "final_blow": True,
+                        "security_status": -10,
+                        "ship_type_id": 34562,
+                        "weapon_type_id": 2977,
+                    },
+                    {
+                        "alliance_id": 3001,
+                        "character_id": 1002,
+                        "corporation_id": 2001,
+                        "faction_id": 500001,
+                        "damage_done": 50,
+                        "final_blow": False,
+                        "security_status": -10,
+                        "ship_type_id": 3756,
+                        "weapon_type_id": 2488,
+                    },
+                ],
+                "killmail_id": None,
+                "killmail_time": None,
+                "solar_system_id": 30004984,
+                "moon_id": 40000001,
+                "war_id": 666,
+                "victim": {
+                    "alliance_id": 3011,
+                    "character_id": 1011,
+                    "corporation_id": 2011,
+                    "faction_id": 500004,
+                    "damage_taken": 434,
+                    "items": [],
+                    "position": None,
+                    "ship_type_id": 603,
+                },
+            },
+            {
+                "locationID": 50012306,
+                "hash": "low sec kill",
+                "fittedValue": 10000,
+                "totalValue": 10000,
+                "points": 1,
+                "npc": False,
+                "solo": False,
+                "awox": False,
+                "href": "",
+            },
+        )
+        self.assertEqual(km.id, 42)
+
+    def test_can_create_when_solar_system_is_missing(self):
+        km = Killmail.create_from_zkb_data(
+            42,
+            {
+                "attackers": [
+                    {
+                        "alliance_id": 3001,
+                        "character_id": 1001,
+                        "corporation_id": 2001,
+                        "faction_id": 500001,
+                        "damage_done": 434,
+                        "final_blow": True,
+                        "security_status": -10,
+                        "ship_type_id": 34562,
+                        "weapon_type_id": 2977,
+                    },
+                    {
+                        "alliance_id": 3001,
+                        "character_id": 1002,
+                        "corporation_id": 2001,
+                        "faction_id": 500001,
+                        "damage_done": 50,
+                        "final_blow": False,
+                        "security_status": -10,
+                        "ship_type_id": 3756,
+                        "weapon_type_id": 2488,
+                    },
+                ],
+                "killmail_id": None,
+                "killmail_time": None,
+                "moon_id": 40000001,
+                "war_id": 666,
+                "victim": {
+                    "alliance_id": 3011,
+                    "character_id": 1011,
+                    "corporation_id": 2011,
+                    "faction_id": 500004,
+                    "damage_taken": 434,
+                    "items": [],
+                    "position": {
+                        "x": -1090788346073.3304,
+                        "y": 215361914442.54877,
+                        "z": -22223971337.631683,
+                    },
+                    "ship_type_id": 603,
+                },
+            },
+            {
+                "locationID": 50012306,
+                "hash": "low sec kill",
+                "fittedValue": 10000,
+                "totalValue": 10000,
+                "points": 1,
+                "npc": False,
+                "solo": False,
+                "awox": False,
+                "href": "",
+            },
+        )
+        self.assertEqual(km.id, 42)
