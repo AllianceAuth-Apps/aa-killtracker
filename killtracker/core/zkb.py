@@ -56,6 +56,10 @@ class ZKBTooManyRequestsError(Exception):
         self.is_original = is_original
 
 
+class ZKBRedisQShuttingDownWarning(Exception):
+    """ZKB returning fake error to inform about planned shutdown."""
+
+
 class KillmailDoesNotExist(Exception):
     """Killmail does not exist in storage."""
 
@@ -554,6 +558,9 @@ def fetch_killmail_from_redisq() -> Optional["Killmail"]:
         logger.warning(
             "ZKB API returned error: %d %s", response.status_code, response.text
         )
+        if response.status_code == HTTPStatus.FORBIDDEN:
+            raise ZKBRedisQShuttingDownWarning()
+
         if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
             try:
                 retry_after = int(response.headers["Retry-After"])

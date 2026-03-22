@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.2.2] - 2026-03-22
+
+## Update instructions
+
+Most installations will see an delay of about 3 hours due to this bug,
+but should be able to catch up naturally after installing this fix.
+It is also possible to skip the recovery and get new kills immediately by changing the KILLTRACKER_QUEUE_ID.
+However, this why older killmails will be ignored.
+
+## Fixed
+
+- Killmails forwarded with significant delay caused by redisq shutdown "warning"
+
 ## [1.2.1] - 2025-12-13
 
 ## Fixed
