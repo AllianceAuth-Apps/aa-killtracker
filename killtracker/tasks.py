@@ -54,7 +54,7 @@ def run_killtracker(self: Task) -> int:
         return KILLTRACKER_RUN_TIMEOUT - elapsed <= 0
 
     killmails_count = 0
-    for _ in range(KILLTRACKER_MAX_KILLMAILS_PER_RUN):
+    while killmails_count < KILLTRACKER_MAX_KILLMAILS_PER_RUN:
         if is_timed_out():
             break
 
@@ -65,6 +65,11 @@ def run_killtracker(self: Task) -> int:
         km = None
         try:
             km = zkb.fetch_killmail_from_redisq()
+
+        except zkb.ZKBRedisQShuttingDownWarning:
+            logger.info("Ignoring shutdown warning from ZKB")
+            continue
+
         except zkb.ZKBTooManyRequestsError as exc:
             seconds = (exc.retry_at - now()).total_seconds()
             if seconds < 0:

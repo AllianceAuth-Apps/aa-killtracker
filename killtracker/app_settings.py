@@ -108,7 +108,7 @@ two (2) requests per second per IP address.
 """
 
 KILLTRACKER_MAX_KILLMAILS_PER_RUN = clean_setting(
-    "KILLTRACKER_MAX_KILLMAILS_PER_RUN", default_value=500, min_value=1
+    "KILLTRACKER_MAX_KILLMAILS_PER_RUN", default_value=100, min_value=1
 )
 """Maximum number of killmails retrieved from ZKB by task run."""
 
