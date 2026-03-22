@@ -111,6 +111,27 @@ class TestRunKilltracker(TestTrackerBase):
         # then
         self.assertEqual(mock_run_tracker.delay.call_count, 4)
 
+    def test_should_ignore_zkb_shutdown_warning(
+        self,
+        mock_run_tracker,
+        mock_fetch_killmail_from_zkb_redisq,
+        mock_store_killmail,
+        mock_delete_stale_killmails,
+        mock_is_shutting_down,
+    ):
+        # given
+        mock_is_shutting_down.return_value = False
+        mock_fetch_killmail_from_zkb_redisq.side_effect = [
+            load_killmail(10000001),
+            zkb.ZKBRedisQShuttingDownWarning(),
+            load_killmail(10000002),
+            None,
+        ]
+        # when
+        run_killtracker.delay()
+        # then
+        self.assertEqual(mock_run_tracker.delay.call_count, 4)
+
     @patch(MODULE_PATH + ".KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS", 30)
     @patch(MODULE_PATH + ".KILLTRACKER_STORING_KILLMAILS_ENABLED", True)
     def test_can_store_killmails(

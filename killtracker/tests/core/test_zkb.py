@@ -19,6 +19,7 @@ from killtracker.core.zkb import (
     _ZKB_REDISQ_URL,
     Killmail,
     KillmailDoesNotExist,
+    ZKBRedisQShuttingDownWarning,
     ZKBTooManyRequestsError,
     _EntityCount,
     fetch_killmail_from_api,
@@ -181,6 +182,26 @@ You can only have one request to listen.php in flight at any time, otherwise you
         killmail = fetch_killmail_from_redisq()
         # then
         self.assertIsNone(killmail)
+
+    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
+    def test_should_raise_special_exception_when_zkb_returns_shutdown_warning(
+        self, requests_mocker, mock_esi, mock_cache
+    ):
+        # given
+        requests_mocker.register_uri(
+            "GET",
+            _ZKB_REDISQ_URL,
+            status_code=403,
+            json={
+                "access": "denied!",
+                "remaining": "70 days until May 31, 2026",
+                "chance": "30.00%",
+                "message": "redisq is shutting down May 31, 2026!",  # shortened
+            },
+        )
+        # when/then
+        with self.assertRaises(ZKBRedisQShuttingDownWarning):
+            fetch_killmail_from_redisq()
 
     @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_return_none_when_zkb_does_not_return_json(
@@ -669,4 +690,5 @@ class TestKillmailCreateFromZkbData(TestCase):
                 "href": "",
             },
         )
+        self.assertEqual(km.id, 42)
         self.assertEqual(km.id, 42)
