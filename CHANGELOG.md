@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.3.0] - 2026-03-23
+
+## Update instructions
+
+This release comes with a tool to remove ESI cache keys.
+Please run the tool directly after installing this release and while AA is shut down:
+
+```sh
+python manage.py purge_esi_cache
+```
+
+## Change
+
+- No longer caches killmails. This should significantly reduce Redis memory usage and improve it's performance. Killmails are cached for a month, which leads to a huge amount of additional cache keys (>300K). With an average size of about 7K this amounts to about an additional 3 GB that Redis has to manage. As Killmails are only used once, they don't need to be cached.
+
 ## [1.2.2] - 2026-03-22
 
 ## Update instructions
