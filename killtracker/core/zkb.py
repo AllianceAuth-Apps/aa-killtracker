@@ -643,7 +643,7 @@ def _fetch_killmail_from_esi(
     killmail: dict = esi.client.Killmails.get_killmails_killmail_id_killmail_hash(
         killmail_id=killmail_id,
         killmail_hash=killmail_zkb["hash"],
-    ).results()
+    ).results(ignore_cache=True)
     if not killmail:
         logger.warning("ESI did not return any data for killmail ID %d", killmail_id)
         return None
