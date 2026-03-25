@@ -48,7 +48,7 @@ logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
 class R2Z2TooManyRequestsError(Exception):
-    """ZKB RedisQ API has returned 429 Too Many Requests HTTP status code."""
+    """ZKB R2Z2 API has returned 429 Too Many Requests HTTP status code."""
 
     def __init__(self, retry_at: dt.datetime, is_original: bool = True):
         self.retry_at = retry_at

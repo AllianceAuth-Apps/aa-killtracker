@@ -2,9 +2,6 @@
 
 from app_utils.app_settings import clean_setting
 
-KILLTRACKER_REDISQ_LOCK_TIMEOUT = clean_setting("KILLTRACKER_REDISQ_LOCK_TIMEOUT", 5)
-"""Timeout for lock to ensure atomic access to ZKB RedisQ."""
-
 KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER = clean_setting(
     "KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER", 600
 )
