@@ -56,7 +56,7 @@ class TestTrackerBase(LoadTestDataMixin, TestCase):
 @patch(MODULE_PATH + ".workers.is_shutting_down", spec=True)
 @patch(MODULE_PATH + ".delete_stale_killmails", spec=True)
 @patch(MODULE_PATH + ".store_killmail", spec=True)
-@patch(MODULE_PATH + ".zkb.fetch_killmail_from_redisq")
+@patch(MODULE_PATH + ".zkb.fetch_killmail_from_r2z2")
 @patch(MODULE_PATH + ".run_tracker", spec=True)
 class TestRunKilltracker(TestTrackerBase):
     @staticmethod
@@ -76,14 +76,14 @@ class TestRunKilltracker(TestTrackerBase):
     def test_should_run_normally(
         self,
         mock_run_tracker,
-        mock_fetch_killmail_from_zkb_redisq,
+        mock_fetch_killmail_from_r2z2,
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_shutting_down,
     ):
         # given
         mock_is_shutting_down.return_value = False
-        mock_fetch_killmail_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
+        mock_fetch_killmail_from_r2z2.side_effect = self.my_fetch_from_zkb()
         self.webhook_1._error_queue.enqueue(load_killmail(10000004).asjson())
         # when
         run_killtracker.delay()
@@ -98,35 +98,14 @@ class TestRunKilltracker(TestTrackerBase):
     def test_should_stop_when_max_killmails_received(
         self,
         mock_run_tracker,
-        mock_fetch_killmail_from_zkb_redisq,
+        mock_fetch_killmail_from_r2z2,
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_shutting_down,
     ):
         # given
         mock_is_shutting_down.return_value = False
-        mock_fetch_killmail_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
-        # when
-        run_killtracker.delay()
-        # then
-        self.assertEqual(mock_run_tracker.delay.call_count, 4)
-
-    def test_should_ignore_zkb_shutdown_warning(
-        self,
-        mock_run_tracker,
-        mock_fetch_killmail_from_zkb_redisq,
-        mock_store_killmail,
-        mock_delete_stale_killmails,
-        mock_is_shutting_down,
-    ):
-        # given
-        mock_is_shutting_down.return_value = False
-        mock_fetch_killmail_from_zkb_redisq.side_effect = [
-            load_killmail(10000001),
-            zkb.ZKBRedisQShuttingDownWarning(),
-            load_killmail(10000002),
-            None,
-        ]
+        mock_fetch_killmail_from_r2z2.side_effect = self.my_fetch_from_zkb()
         # when
         run_killtracker.delay()
         # then
@@ -137,14 +116,14 @@ class TestRunKilltracker(TestTrackerBase):
     def test_can_store_killmails(
         self,
         mock_run_tracker,
-        mock_fetch_killmail_from_zkb_redisq,
+        mock_fetch_killmail_from_r2z2,
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_shutting_down,
     ):
         # given
         mock_is_shutting_down.return_value = False
-        mock_fetch_killmail_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
+        mock_fetch_killmail_from_r2z2.side_effect = self.my_fetch_from_zkb()
         # when
         run_killtracker.delay()
         # then
@@ -156,14 +135,14 @@ class TestRunKilltracker(TestTrackerBase):
     def test_should_retry_when_too_many_errors_received(
         self,
         mock_run_tracker,
-        mock_fetch_killmail_from_zkb_redisq,
+        mock_fetch_killmail_from_r2z2,
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_shutting_down,
     ):
         # given
         mock_is_shutting_down.return_value = False
-        mock_fetch_killmail_from_zkb_redisq.side_effect = zkb.ZKBTooManyRequestsError(
+        mock_fetch_killmail_from_r2z2.side_effect = zkb.R2Z2TooManyRequestsError(
             now() + dt.timedelta(minutes=1)
         )
         # when/then
@@ -175,14 +154,14 @@ class TestRunKilltracker(TestTrackerBase):
     def test_should_abort_when_worker_is_offline(
         self,
         mock_run_tracker,
-        mock_fetch_killmail_from_zkb_redisq,
+        mock_fetch_killmail_from_r2z2,
         mock_store_killmail,
         mock_delete_stale_killmails,
         mock_is_shutting_down,
     ):
         # given
         mock_is_shutting_down.return_value = True
-        mock_fetch_killmail_from_zkb_redisq.side_effect = self.my_fetch_from_zkb()
+        mock_fetch_killmail_from_r2z2.side_effect = self.my_fetch_from_zkb()
         # when
         run_killtracker.delay()
         # then

@@ -1,7 +1,7 @@
 [
     {
-        "killID": 10000001,
-        "killmail": {
+        "killmail_id": 10000001,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -70,8 +70,8 @@
         }
     },
     {
-        "killID": 10000002,
-        "killmail": {
+        "killmail_id": 10000002,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -124,8 +124,8 @@
         }
     },
     {
-        "killID": 10000003,
-        "killmail": {
+        "killmail_id": 10000003,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -178,8 +178,8 @@
         }
     },
     {
-        "killID": 10000004,
-        "killmail": {
+        "killmail_id": 10000004,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -232,8 +232,8 @@
         }
     },
     {
-        "killID": 10000005,
-        "killmail": {
+        "killmail_id": 10000005,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3011,
@@ -276,8 +276,8 @@
         }
     },
     {
-        "killID": 10000101,
-        "killmail": {
+        "killmail_id": 10000101,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -340,8 +340,8 @@
         }
     },
     {
-        "killID": 10000102,
-        "killmail": {
+        "killmail_id": 10000102,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -404,8 +404,8 @@
         }
     },
     {
-        "killID": 10000103,
-        "killmail": {
+        "killmail_id": 10000103,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -468,8 +468,8 @@
         }
     },
     {
-        "killID": 10000201,
-        "killmail": {
+        "killmail_id": 10000201,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -532,8 +532,8 @@
         }
     },
     {
-        "killID": 10000301,
-        "killmail": {
+        "killmail_id": 10000301,
+        "esi": {
             "attackers": [
                 {
                     "faction_id": 500001,
@@ -572,8 +572,8 @@
         }
     },
     {
-        "killID": 10000302,
-        "killmail": {
+        "killmail_id": 10000302,
+        "esi": {
             "attackers": [
                 {
                     "faction_id": 500001,
@@ -618,8 +618,8 @@
         }
     },
     {
-        "killID": 10000401,
-        "killmail": {
+        "killmail_id": 10000401,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -682,8 +682,8 @@
         }
     },
     {
-        "killID": 10000402,
-        "killmail": {
+        "killmail_id": 10000402,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -745,8 +745,8 @@
         }
     },
     {
-        "killID": 10000403,
-        "killmail": {
+        "killmail_id": 10000403,
+        "esi": {
             "attackers": [
                 {
                     "character_id": 1001,
@@ -807,8 +807,8 @@
         }
     },
     {
-        "killID": 10000501,
-        "killmail": {
+        "killmail_id": 10000501,
+        "esi": {
             "attackers": [
                 {
                     "character_id": 1001,
@@ -849,8 +849,8 @@
         }
     },
     {
-        "killID": 10000502,
-        "killmail": {
+        "killmail_id": 10000502,
+        "esi": {
             "attackers": [
                 {
                     "character_id": 1001,
@@ -891,8 +891,8 @@
         }
     },
     {
-        "killID": 10000503,
-        "killmail": {
+        "killmail_id": 10000503,
+        "esi": {
             "attackers": [
                 {
                     "corporation_id": 2001,
@@ -933,8 +933,8 @@
         }
     },
     {
-        "killID": 10006001,
-        "killmail": {
+        "killmail_id": 10006001,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -1047,8 +1047,8 @@
         }
     },
     {
-        "killID": 10006002,
-        "killmail": {
+        "killmail_id": 10006002,
+        "esi": {
             "attackers": [
                 {
                     "alliance_id": 3001,
@@ -1171,8 +1171,8 @@
         }
     },
     {
-        "killID": 10006003,
-        "killmail": {
+        "killmail_id": 10006003,
+        "esi": {
             "attackers": [
                 {
                     "character_id": 1001,
@@ -1277,8 +1277,8 @@
         }
     },
     {
-        "killID": 10006004,
-        "killmail": {
+        "killmail_id": 10006004,
+        "esi": {
             "attackers": [
                 {
                     "character_id": 1001,

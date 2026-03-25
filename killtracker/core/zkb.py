@@ -9,14 +9,13 @@ from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from time import sleep
 from typing import List, Optional, Set
-from urllib.parse import quote_plus
+from urllib.parse import urljoin
 
 import requests
 from dacite import DaciteError, from_dict
-from simplejson.errors import JSONDecodeError
 
 from django.core.cache import cache
-from django.core.exceptions import ImproperlyConfigured
+from django.utils.dateparse import parse_datetime
 from django.utils.timezone import now
 from eveuniverse.models import EveType
 
@@ -26,8 +25,6 @@ from app_utils.logging import LoggerAddTag
 
 from killtracker import USER_AGENT_TEXT, __title__
 from killtracker.app_settings import (
-    KILLTRACKER_QUEUE_ID,
-    KILLTRACKER_REDISQ_TTW,
     KILLTRACKER_STORAGE_KILLMAILS_LIFETIME,
     KILLTRACKER_ZKB_REQUEST_DELAY,
 )
@@ -36,28 +33,33 @@ from killtracker.providers import esi
 
 ZKB_KILLMAIL_BASEURL = "https://zkillboard.com/kill/"
 
-_KEY_RETRY_AT = "killtracker-zkb-retry-at"
 _KEY_LAST_REQUEST = "killtracker-zkb-last-request"
+_KEY_LAST_SEQUENCE = "killtracker-zkb-last-sequence"
+_KEY_RETRY_AT = "killtracker-zkb-retry-at"
 _MAIN_MINIMUM_COUNT = 2
 _MAIN_MINIMUM_SHARE = 0.25
 _REQUESTS_TIMEOUT = (5, 30)
 _ZKB_429_DEFAULT_TIMEOUT = 10
 _ZKB_API_URL = "https://zkillboard.com/api/"
-_ZKB_REDISQ_URL = "https://zkillredisq.stream/listen.php"
+_R2Z2_BASE_URL = "https://r2z2.zkillboard.com/ephemeral/"
+_R2Z2_SEQUENCE_TIMEOUT = 24 * 3600  # 24 hrs
 
 logger = LoggerAddTag(get_extension_logger(__name__), __title__)
 
 
-class ZKBTooManyRequestsError(Exception):
-    """ZKB RedisQ API has returned 429 Too Many Requests HTTP status code."""
+class R2Z2TooManyRequestsError(Exception):
+    """ZKB R2Z2 API has returned 429 Too Many Requests HTTP status code."""
 
     def __init__(self, retry_at: dt.datetime, is_original: bool = True):
         self.retry_at = retry_at
         self.is_original = is_original
 
 
-class ZKBRedisQShuttingDownWarning(Exception):
-    """ZKB returning fake error to inform about planned shutdown."""
+class R2Z2Error(Exception):
+    """An error occurred while trying to fetch killmails from R2Z2."""
+
+    def __init__(self, error: str):
+        self.error = error
 
 
 class KillmailDoesNotExist(Exception):
@@ -398,7 +400,7 @@ class Killmail(_KillmailBase):
     @classmethod
     def delete_all(cls) -> int:
         """Delete all killmails in storage and return how many were deleted."""
-        return cache.delete_pattern(f"{cls._STORAGE_BASE_KEY}*")
+        return cache.delete_pattern(f"{cls._STORAGE_BASE_KEY}*", itersize=100_000)
 
     @classmethod
     def _storage_key(cls, id: int) -> str:
@@ -421,7 +423,7 @@ class Killmail(_KillmailBase):
     @classmethod
     def create_from_zkb_data(
         cls, killmail_id: int, killmail_data: dict, killmail_zkb: dict
-    ) -> Optional["Killmail"]:
+    ) -> "Killmail":
         """Create and return a new Killmail object from ZKB data."""
 
         victim, position = cls._extract_victim_and_position(killmail_data)
@@ -507,26 +509,120 @@ class Killmail(_KillmailBase):
         return KillmailZkb(**params)
 
 
-def fetch_killmail_from_redisq() -> Optional["Killmail"]:
-    """Fetches and returns a killmail from ZKB REDISQ API.
+def clear_cache():
+    """Clears all cache entries related this this module."""
+    cache.delete(_KEY_LAST_REQUEST)
+    cache.delete(_KEY_LAST_SEQUENCE)
+    cache.delete(_KEY_RETRY_AT)
+    Killmail.delete_all()
+
+
+def fetch_killmail_from_r2z2() -> Optional["Killmail"]:
+    """Tries to fetch and return a killmail from the ZKB R2Z2 API.
 
     Will automatically wait for a free rate limit slot if needed.
     Will re-raise TooManyRequests if a recent 429 timeout is not yet expired.
 
     This method is not thread safe.
 
-    Returns None if no killmail was received.
+    Returns None if no new killmails are available.
     """
-    if not KILLTRACKER_QUEUE_ID:
-        raise ImproperlyConfigured("You need to define a queue ID in your settings.")
-
-    if "," in KILLTRACKER_QUEUE_ID:
-        raise ImproperlyConfigured("A queue ID must not contains commas.")
-
     retry_at = datetime_or_none(cache.get(_KEY_RETRY_AT))
     if retry_at is not None and retry_at > now():
-        raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=False)
+        raise R2Z2TooManyRequestsError(retry_at=retry_at, is_original=False)
 
+    sequence = _fetch_sequence()
+
+    _wait_for_next_slot()
+
+    url = urljoin(_R2Z2_BASE_URL, f"{sequence}.json")
+    response = requests.get(
+        url, timeout=_REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
+    )
+    cache.set(_KEY_LAST_REQUEST, now(), timeout=KILLTRACKER_ZKB_REQUEST_DELAY + 30)
+    logger.debug(
+        "Response from R2Z2:: %d %s %s",
+        response.status_code,
+        response.headers,
+        response.text,
+    )
+
+    if response.status_code == HTTPStatus.NOT_FOUND:
+        return None  # no more killmails
+
+    if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
+        try:
+            retry_after = int(response.headers["Retry-After"])
+        except KeyError:
+            retry_after = _ZKB_429_DEFAULT_TIMEOUT
+        retry_at = now() + dt.timedelta(seconds=retry_after)
+        cache.set(_KEY_RETRY_AT, retry_at, timeout=retry_after + 60)
+        raise R2Z2TooManyRequestsError(retry_at=retry_at, is_original=True)
+
+    response.raise_for_status()
+
+    cache.set(_KEY_LAST_SEQUENCE, sequence + 1, _R2Z2_SEQUENCE_TIMEOUT)
+
+    data = response.json()
+    if not data:
+        raise R2Z2Error("fetching killmail: empty response")
+
+    try:
+        killmail_id = data["killmail_id"]
+        zkb = data["zkb"]
+        esi_data = data["esi"]
+        killmail_time = esi_data["killmail_time"]
+    except KeyError as ex:
+        raise R2Z2Error(f"fetching killmail: incomplete response: {data}") from ex
+
+    esi_data["killmail_time"] = parse_datetime(killmail_time)
+
+    km = Killmail.create_from_zkb_data(killmail_id, esi_data, zkb)
+    logger.info("ZKB returned killmail %d", km.id)
+
+    return km
+
+
+def _fetch_sequence() -> int:
+    """Return a valid sequence."""
+    x = cache.get(_KEY_LAST_SEQUENCE)
+    if not x:
+        x = _fetch_initial_sequence()
+
+    try:
+        return int(x)
+    except TypeError:
+        x = cache.clear(_KEY_LAST_SEQUENCE)
+        raise R2Z2Error(f"sequence has invalid type: {x}") from None
+
+
+def _fetch_initial_sequence():
+    """Return an initial sequence."""
+    _wait_for_next_slot()
+    url = urljoin(_R2Z2_BASE_URL, "sequence.json")
+    response = requests.get(
+        url, timeout=_REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
+    )
+    response.raise_for_status()
+
+    data = response.json()
+    if not data:
+        raise R2Z2Error("initial sequence: empty response")
+
+    try:
+        x = data.get("sequence")
+    except ValueError:
+        x = None
+
+    if not x:
+        raise R2Z2Error(f"initial sequence: invalid response: {data}")
+
+    logger.debug("starting new sequence: %s", x)
+    return x
+
+
+def _wait_for_next_slot():
+    """Wait for next rate limit slot."""
     last_request = datetime_or_none(cache.get(_KEY_LAST_REQUEST))
     if last_request is not None:
         next_slot = last_request + dt.timedelta(
@@ -534,71 +630,8 @@ def fetch_killmail_from_redisq() -> Optional["Killmail"]:
         )
         seconds = (next_slot - now()).total_seconds()
         if seconds > 0:
-            logger.debug("ZKB API: Waiting %f seconds for next free slot", seconds)
+            logger.debug("R2Z2:: Waiting %f seconds for next free slot", seconds)
             sleep(seconds)
-
-    response = requests.get(
-        _ZKB_REDISQ_URL,
-        params={
-            "queueID": quote_plus(KILLTRACKER_QUEUE_ID),
-            "ttw": KILLTRACKER_REDISQ_TTW,
-        },
-        timeout=_REQUESTS_TIMEOUT,
-        headers={"User-Agent": USER_AGENT_TEXT},
-    )
-    cache.set(_KEY_LAST_REQUEST, now(), timeout=KILLTRACKER_ZKB_REQUEST_DELAY + 30)
-    logger.debug(
-        "Response from ZKB API: %d %s %s",
-        response.status_code,
-        response.headers,
-        response.text,
-    )
-
-    if not response.ok:
-        logger.warning(
-            "ZKB API returned error: %d %s", response.status_code, response.text
-        )
-        if response.status_code == HTTPStatus.FORBIDDEN:
-            raise ZKBRedisQShuttingDownWarning()
-
-        if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
-            try:
-                retry_after = int(response.headers["Retry-After"])
-            except KeyError:
-                retry_after = _ZKB_429_DEFAULT_TIMEOUT
-            retry_at = now() + dt.timedelta(seconds=retry_after)
-            cache.set(_KEY_RETRY_AT, retry_at, timeout=retry_after + 60)
-            raise ZKBTooManyRequestsError(retry_at=retry_at, is_original=True)
-
-        return None
-
-    try:
-        data = response.json()
-    except JSONDecodeError:
-        logger.error("Error parsing ZKB API response:\n%s", response.text)
-        return None
-
-    if not data or "package" not in data or not data["package"]:
-        logger.info("ZKB did not return a killmail")
-        return None
-
-    package_data = data["package"]
-    try:
-        killmail_id = package_data["killID"]
-        killmail_zkb = package_data["zkb"]
-    except KeyError:
-        logger.warning(
-            "Failed to parse response from ZKB: %s", package_data, exc_info=True
-        )
-        return None
-
-    km = _fetch_killmail_from_esi(killmail_id, killmail_zkb)
-    if not km:
-        logger.info("Failed to parse killmail from ZKB")
-        return None
-
-    logger.info("ZKB returned killmail %d", km.id)
-    return km
 
 
 def fetch_killmail_from_api(killmail_id: int) -> Optional["Killmail"]:
@@ -611,7 +644,7 @@ def fetch_killmail_from_api(killmail_id: int) -> Optional["Killmail"]:
     if killmail_json:
         return Killmail.from_json(killmail_json)
 
-    url = f"{_ZKB_API_URL}killID/{killmail_id}/"
+    url = urljoin(_ZKB_API_URL, f"killID/{killmail_id}/")
     response = requests.get(
         url, timeout=_REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
     )

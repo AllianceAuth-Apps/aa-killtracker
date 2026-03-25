@@ -2,9 +2,6 @@
 
 from app_utils.app_settings import clean_setting
 
-KILLTRACKER_REDISQ_LOCK_TIMEOUT = clean_setting("KILLTRACKER_REDISQ_LOCK_TIMEOUT", 5)
-"""Timeout for lock to ensure atomic access to ZKB RedisQ."""
-
 KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER = clean_setting(
     "KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER", 600
 )
@@ -19,24 +16,6 @@ KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS = clean_setting(
 """Killmails older than set number of days will be purged from the database.
 If you want to keep all killmails set this to 0.
 """
-
-KILLTRACKER_QUEUE_ID = clean_setting("KILLTRACKER_QUEUE_ID", "")
-"""Unique ID used to identify this server when fetching killmails from zKillboard.
-
-Please note that the queue ID must be globally unique for all users of the zKillboard API, so choose carefully.
-
-We recommend using only characters (upper and lower case) and numbers,
-but no spaces or any special characters when choosing your ID.
-
-Example: ``"Voltron9000"`` (don't use this exact example)
-
-We suggest to use your alliance or corporation name (without spaces and special characters) as queue ID.
-
-If you are running multiple instances of Killtracker please choose a different queue ID for each of them.
-
-This setting is mandatory.
-"""
-
 
 KILLTRACKER_STORING_KILLMAILS_ENABLED = clean_setting(
     "KILLTRACKER_STORING_KILLMAILS_ENABLED", False
@@ -56,9 +35,6 @@ when creating trackers.
 
 #####################
 # INTERNAL SETTINGS
-
-KILLTRACKER_REDISQ_TTW = clean_setting("KILLTRACKER_REDISQ_TTW", 1)
-"""Max duration to wait for new killmails from redisq in seconds."""
 
 KILLTRACKER_TASKS_TIMEOUT = clean_setting("KILLTRACKER_TASKS_TIMEOUT", 1_800)
 """Tasks hard timeout in seconds."""
@@ -99,16 +75,16 @@ KILLTRACKER_STORAGE_KILLMAILS_LIFETIME = clean_setting(
 """Max lifetime of killmails in temporary storage in seconds."""
 
 KILLTRACKER_ZKB_REQUEST_DELAY = clean_setting(
-    "KILLTRACKER_ZKB_REQUEST_DELAY", default_value=500, min_value=500
+    "KILLTRACKER_ZKB_REQUEST_DELAY", default_value=100, min_value=50
 )
 """Delay between subsequent calls to ZKB API in milliseconds.
 
-This delay ensures the app does not breach the CloudFlare rate limit of currently
-two (2) requests per second per IP address.
+This delay ensures the app does not breach the CloudFlare rate limit.
+The limit is 20 requests per second per IP address.
 """
 
 KILLTRACKER_MAX_KILLMAILS_PER_RUN = clean_setting(
-    "KILLTRACKER_MAX_KILLMAILS_PER_RUN", default_value=100, min_value=1
+    "KILLTRACKER_MAX_KILLMAILS_PER_RUN", default_value=550, min_value=1
 )
 """Maximum number of killmails retrieved from ZKB by task run."""
 
