@@ -13,7 +13,6 @@ from urllib.parse import urljoin
 
 import requests
 from dacite import DaciteError, from_dict
-from simplejson.errors import JSONDecodeError
 
 from django.core.cache import cache
 from django.utils.dateparse import parse_datetime
@@ -424,7 +423,7 @@ class Killmail(_KillmailBase):
     @classmethod
     def create_from_zkb_data(
         cls, killmail_id: int, killmail_data: dict, killmail_zkb: dict
-    ) -> Optional["Killmail"]:
+    ) -> "Killmail":
         """Create and return a new Killmail object from ZKB data."""
 
         victim, position = cls._extract_victim_and_position(killmail_data)
@@ -510,6 +509,14 @@ class Killmail(_KillmailBase):
         return KillmailZkb(**params)
 
 
+def clear_cache():
+    """Clears all cache entries related this this module."""
+    cache.delete(_KEY_LAST_REQUEST)
+    cache.delete(_KEY_LAST_SEQUENCE)
+    cache.delete(_KEY_RETRY_AT)
+    Killmail.delete_all()
+
+
 def fetch_killmail_from_r2z2() -> Optional["Killmail"]:
     """Tries to fetch and return a killmail from the ZKB R2Z2 API.
 
@@ -524,25 +531,9 @@ def fetch_killmail_from_r2z2() -> Optional["Killmail"]:
     if retry_at is not None and retry_at > now():
         raise R2Z2TooManyRequestsError(retry_at=retry_at, is_original=False)
 
-    last_request = datetime_or_none(cache.get(_KEY_LAST_REQUEST))
-    if last_request is not None:
-        next_slot = last_request + dt.timedelta(
-            milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY
-        )
-        seconds = (next_slot - now()).total_seconds()
-        if seconds > 0:
-            logger.debug("R2Z2:: Waiting %f seconds for next free slot", seconds)
-            sleep(seconds)
+    sequence = _fetch_sequence()
 
-    x = cache.get(_KEY_LAST_SEQUENCE)
-    if x is None:
-        x = _fetch_initial_sequence()
-
-    try:
-        sequence = int(x)
-    except TypeError:
-        x = cache.clear(_KEY_LAST_SEQUENCE)
-        raise R2Z2Error(f"sequence has invalid type: {x}") from None
+    _wait_for_next_slot()
 
     url = urljoin(_R2Z2_BASE_URL, f"{sequence}.json")
     response = requests.get(
@@ -568,19 +559,11 @@ def fetch_killmail_from_r2z2() -> Optional["Killmail"]:
         cache.set(_KEY_RETRY_AT, retry_at, timeout=retry_after + 60)
         raise R2Z2TooManyRequestsError(retry_at=retry_at, is_original=True)
 
-    if not response.ok:
-        logger.warning(
-            "R2Z2: returned error: %d %s", response.status_code, response.text
-        )
-        raise R2Z2Error("HTTP error")
+    response.raise_for_status()
 
     cache.set(_KEY_LAST_SEQUENCE, sequence + 1, _R2Z2_SEQUENCE_TIMEOUT)
 
-    try:
-        data = response.json()
-    except JSONDecodeError as ex:
-        raise R2Z2Error(f"fetching killmail: invalid response: {response.text}") from ex
-
+    data = response.json()
     if not data:
         raise R2Z2Error("fetching killmail: empty response")
 
@@ -588,13 +571,11 @@ def fetch_killmail_from_r2z2() -> Optional["Killmail"]:
         killmail_id = data["killmail_id"]
         zkb = data["zkb"]
         esi_data = data["esi"]
+        killmail_time = esi_data["killmail_time"]
     except KeyError as ex:
         raise R2Z2Error(f"fetching killmail: incomplete response: {data}") from ex
 
-    try:
-        esi_data["killmail_time"] = parse_datetime(esi_data["killmail_time"])
-    except (KeyError, ValueError) as ex:
-        raise R2Z2Error(f"fetching killmail: parsing killtime: {esi_data}") from ex
+    esi_data["killmail_time"] = parse_datetime(killmail_time)
 
     km = Killmail.create_from_zkb_data(killmail_id, esi_data, zkb)
     logger.info("ZKB returned killmail %d", km.id)
@@ -602,28 +583,31 @@ def fetch_killmail_from_r2z2() -> Optional["Killmail"]:
     return km
 
 
+def _fetch_sequence() -> int:
+    """Return a valid sequence."""
+    x = cache.get(_KEY_LAST_SEQUENCE)
+    if not x:
+        x = _fetch_initial_sequence()
+
+    try:
+        return int(x)
+    except TypeError:
+        x = cache.clear(_KEY_LAST_SEQUENCE)
+        raise R2Z2Error(f"sequence has invalid type: {x}") from None
+
+
 def _fetch_initial_sequence():
+    """Return an initial sequence."""
+    _wait_for_next_slot()
     url = urljoin(_R2Z2_BASE_URL, "sequence.json")
     response = requests.get(
         url, timeout=_REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
     )
-    logger.debug(
-        "Response from R2Z2: %s %d %s %s",
-        url,
-        response.status_code,
-        response.headers,
-        response.text,
-    )
-    if not response.ok:
-        logger.warning(
-            "R2Z2 returned HTTP error: %d %s", response.status_code, response.text
-        )
-        raise R2Z2Error("initial sequence: HTTP error")
+    response.raise_for_status()
 
-    try:
-        data = response.json()
-    except requests.exceptions.JSONDecodeError as ex:
-        raise R2Z2Error(f"initial sequence: invalid response: {response.text}") from ex
+    data = response.json()
+    if not data:
+        raise R2Z2Error("initial sequence: empty response")
 
     try:
         x = data.get("sequence")
@@ -637,6 +621,19 @@ def _fetch_initial_sequence():
     return x
 
 
+def _wait_for_next_slot():
+    """Wait for next rate limit slot."""
+    last_request = datetime_or_none(cache.get(_KEY_LAST_REQUEST))
+    if last_request is not None:
+        next_slot = last_request + dt.timedelta(
+            milliseconds=KILLTRACKER_ZKB_REQUEST_DELAY
+        )
+        seconds = (next_slot - now()).total_seconds()
+        if seconds > 0:
+            logger.debug("R2Z2:: Waiting %f seconds for next free slot", seconds)
+            sleep(seconds)
+
+
 def fetch_killmail_from_api(killmail_id: int) -> Optional["Killmail"]:
     """Fetches and returns a killmail from ZKB API.
 
@@ -647,7 +644,7 @@ def fetch_killmail_from_api(killmail_id: int) -> Optional["Killmail"]:
     if killmail_json:
         return Killmail.from_json(killmail_json)
 
-    url = f"{_ZKB_API_URL}killID/{killmail_id}/"
+    url = urljoin(_ZKB_API_URL, f"killID/{killmail_id}/")
     response = requests.get(
         url, timeout=_REQUESTS_TIMEOUT, headers={"User-Agent": USER_AGENT_TEXT}
     )
@@ -685,11 +682,3 @@ def _fetch_killmail_from_esi(
         return None
 
     return Killmail.create_from_zkb_data(killmail_id, killmail, killmail_zkb)
-
-
-def clear_cache():
-    """Clears all cache entries related this this module."""
-    cache.delete(_KEY_LAST_REQUEST)
-    cache.delete(_KEY_LAST_SEQUENCE)
-    cache.delete(_KEY_RETRY_AT)
-    Killmail.delete_all()

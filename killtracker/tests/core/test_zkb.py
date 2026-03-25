@@ -3,6 +3,7 @@ import fnmatch
 import unittest
 from unittest.mock import patch
 
+import requests
 import requests_mock
 
 from django.test import TestCase
@@ -153,7 +154,7 @@ class TestFetchKillmailFromR2Z2(NoSocketsTestCase):
             json={},
         )
         # when
-        with self.assertRaises(zkb.R2Z2Error):
+        with self.assertRaises(requests.exceptions.HTTPError):
             zkb.fetch_killmail_from_r2z2()
 
     def test_should_raise_too_many_requests_error(self, mock_cache, requests_mocker):
@@ -200,7 +201,7 @@ class TestFetchKillmailFromR2Z2(NoSocketsTestCase):
             text="this is not JSON",
         )
         # when
-        with self.assertRaises(zkb.R2Z2Error):
+        with self.assertRaises(requests.exceptions.JSONDecodeError):
             zkb.fetch_killmail_from_r2z2()
 
     def test_should_wait_until_next_slot_if_needed(self, mock_cache, requests_mocker):
@@ -622,5 +623,6 @@ class TestKillmailCreateFromZkbData(TestCase):
                 "href": "",
             },
         )
+        self.assertEqual(km.id, 42)
         self.assertEqual(km.id, 42)
         self.assertEqual(km.id, 42)
