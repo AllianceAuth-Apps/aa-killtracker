@@ -89,25 +89,7 @@ CELERYBEAT_SCHEDULE['killtracker_run_killtracker'] = {
     'task': 'killtracker.tasks.run_killtracker',
     'schedule': 60,
 }
-KILLTRACKER_QUEUE_ID = ""  # Put your unique queue ID here
 ```
-
-### Queue ID
-
-Please note that the queue ID must be globally unique for all users of the zKillboard API, so choose carefully.
-
-We suggest to use your alliance name or alliance tag (without any spaces and special characters) as queue ID.
-
-We recommend using only characters (upper and lower case) and numbers,
-but no spaces or any special characters when choosing your ID.
-
-Example (don't use this exact example):
-
-```Python
-KILLTRACKER_QUEUE_ID = "Voltron9000"
-```
-
-If you are running multiple instances of Killtracker please choose a different queue ID for each of them.
 
 ### Additional settings (optional)
 
@@ -173,8 +155,8 @@ You can combine multiple conditions to create the tracker you want. Note that co
 
 Here is a list of all currently supported conditions for each tracker:
 
-Name | Description
--- | --
+Name|Description
+--|--
 require max jumps|Require all killmails to be max x jumps away from origin solar system
 require max distance|Require all killmails to be max x LY away from origin solar system
 require min attackers|Require killmails to have at least given number of attackers
@@ -213,8 +195,7 @@ Note that all settings are optional and the app will use the documented default 
 
 Name | Description | Default
 -- | -- | --
-`KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER`| Ignore killmails that are older than the given number in minutes. Sometimes killmails appear belated on ZKB, this feature ensures they don't create new alerts | `60`
-`KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS`| Killmails older than set number of days will be purged from the database. If you want to keep all killmails set this to 0. Note that this setting is only relevant if you have storing killmails enabled.  | `30`
-`KILLTRACKER_QUEUE_ID`| Unique ID used to identify this server when fetching killmails from zKillboard. This setting is mandatory.  | ``
-`KILLTRACKER_STORING_KILLMAILS_ENABLED`| If set to true Killtracker will automatically store all received killmails in the local database. This can be useful if you want to run analytics on killmails etc. However, please note that Killtracker itself currently does not use stored killmails in any way.  | `False`
-`KILLTRACKER_WEBHOOK_SET_AVATAR`| Wether app sets the name and avatar icon of a webhook. When False the webhook will use it's own values as set on the platform  | `True`
+`KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER` | Ignore killmails that are older than the given number in minutes. Sometimes killmails appear belated on ZKB, this feature ensures they don't create new alerts | `60`
+`KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS` | Killmails older than set number of days will be purged from the database. If you want to keep all killmails set this to 0. Note that this setting is only relevant if you have storing killmails enabled. | `30`
+`KILLTRACKER_STORING_KILLMAILS_ENABLED` | If set to true Killtracker will automatically store all received killmails in the local database. This can be useful if you want to run analytics on killmails etc. However, please note that Killtracker itself currently does not use stored killmails in any way. | `False`
+`KILLTRACKER_WEBHOOK_SET_AVATAR` | Wether app sets the name and avatar icon of a webhook. When False the webhook will use it's own values as set on the platform | `True`

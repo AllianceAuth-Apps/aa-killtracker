@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.4.0] - TBD
+
+This release moves over to the new [R2Z2 API](https://github.com/zKillboard/zKillboard/wiki/API-(R2Z2)) for fetching Killmails from zKillboard.
+The new API has a much higher rate limit, which should improve throughput for fetching mails by up to 5x.
+
+## Update instructions
+
+You can remove the `KILLTRACKER_QUEUE_ID` from your local settings. It is no longer used.
+
+In case you using custom settings for Killtracker please note that the defaults have changed. Adjust your custom setting accordingly: The new default rate limit is 10 per second and the limit of killmails per run is 550.
+If you are using Killtracker with default settings no action is required.
+
+## Changed
+
+- Now using the new R2Z2 API for fetching killmails from ZKB instead of the deprecated RedisQ API.
+
 ## [1.3.0] - 2026-03-23
 
 ## Update instructions

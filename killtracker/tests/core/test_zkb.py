@@ -5,33 +5,23 @@ from unittest.mock import patch
 
 import requests_mock
 
-from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase
 from django.utils.timezone import now
 
 from app_utils.esi_testing import BravadoOperationStub
 from app_utils.testing import CacheFake, NoSocketsTestCase
 
+from killtracker.core import zkb
 from killtracker.core.zkb import (
-    _KEY_LAST_REQUEST,
-    _KEY_RETRY_AT,
     _ZKB_API_URL,
-    _ZKB_REDISQ_URL,
     Killmail,
     KillmailDoesNotExist,
-    ZKBRedisQShuttingDownWarning,
-    ZKBTooManyRequestsError,
     _EntityCount,
     fetch_killmail_from_api,
-    fetch_killmail_from_redisq,
 )
 from killtracker.tests import CacheStub
 from killtracker.tests.testdata.factories import KillmailFactory
-from killtracker.tests.testdata.helpers import (
-    killmails_data,
-    load_killmail,
-    redisq_data,
-)
+from killtracker.tests.testdata.helpers import killmails_data, load_killmail, r2z2_data
 
 MODULE_PATH = "killtracker.core.zkb"
 unittest.util._MAX_LENGTH = 1000
@@ -39,23 +29,25 @@ requests_mock.mock.case_sensitive = True
 
 
 @patch(MODULE_PATH + ".cache", new_callable=CacheFake)
-@patch(MODULE_PATH + ".esi")
 @requests_mock.Mocker()
-class TestCreateFromZkbRedisq(NoSocketsTestCase):
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
-    def test_should_return_killmail(self, requests_mocker, mock_esi, mock_cache):
+class TestFetchKillmailFromR2Z2(NoSocketsTestCase):
+    def test_should_return_killmail_from_scratch(self, mock_cache, requests_mocker):
         # given
         requests_mocker.register_uri(
             "GET",
-            _ZKB_REDISQ_URL,
+            "https://r2z2.zkillboard.com/ephemeral/sequence.json",
             status_code=200,
-            json={"package": redisq_data()[10000001]},
+            json={"sequence": 12345},
         )
-        mock_esi.client.Killmails.get_killmails_killmail_id_killmail_hash.return_value = BravadoOperationStub(
-            killmails_data()[10000001]["killmail"]
+        killmails = r2z2_data()
+        requests_mocker.register_uri(
+            "GET",
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
+            status_code=200,
+            json=killmails[10000001],
         )
         # when
-        killmail = fetch_killmail_from_redisq()
+        killmail = zkb.fetch_killmail_from_r2z2()
         # then
         self.assertIsNotNone(killmail)
         self.assertEqual(killmail.id, 10000001)
@@ -87,205 +79,145 @@ class TestCreateFromZkbRedisq(NoSocketsTestCase):
         self.assertFalse(killmail.zkb.is_solo)
         self.assertFalse(killmail.zkb.is_awox)
 
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
-    def test_should_return_none_when_zkb_returns_empty_package(
-        self, requests_mocker, mock_esi, mock_cache
-    ):
+    def test_should_return_next_killmail(self, mock_cache, requests_mocker):
         # given
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
         requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
+            "GET",
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
+            status_code=200,
+            json=r2z2_data()[10000001],
         )
         # when
-        killmail = fetch_killmail_from_redisq()
+        killmail = zkb.fetch_killmail_from_r2z2()
+        # then
+        self.assertEqual(killmail.id, 10000001)
+
+    def test_should_return_none_when_api_returns_404(self, mock_cache, requests_mocker):
+        # given
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
+        requests_mocker.register_uri(
+            "GET",
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
+            status_code=404,
+            json={},
+        )
+        # when
+        killmail = zkb.fetch_killmail_from_r2z2()
         # then
         self.assertIsNone(killmail)
 
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_ignore_invalid_value_for_retry_at_key(
-        self, requests_mocker, mock_esi, mock_cache
+        self, mock_cache, requests_mocker
     ):
         # given
-        mock_cache.set(_KEY_RETRY_AT, "abc")
+        mock_cache.set(zkb._KEY_RETRY_AT, "abc")
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
         requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
+            "GET",
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
+            status_code=404,
+            json={},
         )
         # when
-        killmail = fetch_killmail_from_redisq()
+        killmail = zkb.fetch_killmail_from_r2z2()
         # then
         self.assertIsNone(killmail)
 
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_ignore_invalid_value_for_last_request_key(
-        self, requests_mocker, mock_esi, mock_cache
+        self, mock_cache, requests_mocker
     ):
         # given
-        mock_cache.set(_KEY_LAST_REQUEST, "abc")
+        mock_cache.set(zkb._KEY_LAST_REQUEST, "abc")
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
         requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
+            "GET",
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
+            status_code=404,
+            json={},
         )
         # when
-        killmail = fetch_killmail_from_redisq()
+        killmail = zkb.fetch_killmail_from_r2z2()
         # then
         self.assertIsNone(killmail)
 
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
-    def test_should_return_none_when_http_error(
-        self, requests_mocker, mock_esi, mock_cache
+    def test_should_raise_error_when_unexpected_http_error(
+        self, mock_cache, requests_mocker
     ):
         # given
-        requests_mocker.register_uri("GET", _ZKB_REDISQ_URL, status_code=500)
-        # when
-        killmail = fetch_killmail_from_redisq()
-        # then
-        self.assertIsNone(killmail)
-
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
-    def test_should_return_raise_too_many_requests_error(
-        self, requests_mocker, mock_esi, mock_cache
-    ):
-        # given
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
         requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=429, text="429 too many requests"
+            "GET",
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
+            status_code=500,
+            json={},
+        )
+        # when
+        with self.assertRaises(zkb.R2Z2Error):
+            zkb.fetch_killmail_from_r2z2()
+
+    def test_should_raise_too_many_requests_error(self, mock_cache, requests_mocker):
+        # given
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
+        requests_mocker.register_uri(
+            "GET",
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
+            status_code=429,
+            json={},
         )
         # when/then
-        with self.assertRaises(ZKBTooManyRequestsError):
-            fetch_killmail_from_redisq()
+        with self.assertRaises(zkb.R2Z2TooManyRequestsError):
+            zkb.fetch_killmail_from_r2z2()
 
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
     def test_should_reraise_too_many_requests_error_when_ongoing(
-        self, requests_mocker, mock_esi, mock_cache
+        self, mock_cache, requests_mocker
     ):
         # given
         retry_at = now() + dt.timedelta(hours=3)
-        mock_cache.set(_KEY_RETRY_AT, retry_at)
-        requests_mocker.register_uri("GET", _ZKB_REDISQ_URL, status_code=500)
+        mock_cache.set(zkb._KEY_RETRY_AT, retry_at)
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
+        requests_mocker.register_uri(
+            "GET",
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
+            status_code=500,
+            json={},
+        )
         # when/then
         self.assertEqual(requests_mocker.call_count, 0)
-        with self.assertRaises(ZKBTooManyRequestsError) as ex:
-            fetch_killmail_from_redisq()
+        with self.assertRaises(zkb.R2Z2TooManyRequestsError) as ex:
+            zkb.fetch_killmail_from_r2z2()
         self.assertEqual(retry_at, ex.exception.retry_at)
 
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
-    def test_should_return_none_when_zkb_returns_general_error(
-        self, requests_mocker, mock_esi, mock_cache
+    def test_should_raise_error_when_api_does_not_return_json(
+        self, mock_cache, requests_mocker
     ):
         # given
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
         requests_mocker.register_uri(
             "GET",
-            _ZKB_REDISQ_URL,
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
             status_code=200,
-            text="""Your IP has been banned because of excessive errors.
-
-You can only have one request to listen.php in flight at any time, otherwise you will generate a too many requests error (429). If you have too many of these errors you will be banned automatically.""",
+            text="this is not JSON",
         )
         # when
-        killmail = fetch_killmail_from_redisq()
-        # then
-        self.assertIsNone(killmail)
+        with self.assertRaises(zkb.R2Z2Error):
+            zkb.fetch_killmail_from_r2z2()
 
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
-    def test_should_raise_special_exception_when_zkb_returns_shutdown_warning(
-        self, requests_mocker, mock_esi, mock_cache
-    ):
+    def test_should_wait_until_next_slot_if_needed(self, mock_cache, requests_mocker):
         # given
+        mock_cache.set(zkb._KEY_LAST_REQUEST, now())
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
         requests_mocker.register_uri(
             "GET",
-            _ZKB_REDISQ_URL,
-            status_code=403,
-            json={
-                "access": "denied!",
-                "remaining": "70 days until May 31, 2026",
-                "chance": "30.00%",
-                "message": "redisq is shutting down May 31, 2026!",  # shortened
-            },
-        )
-        # when/then
-        with self.assertRaises(ZKBRedisQShuttingDownWarning):
-            fetch_killmail_from_redisq()
-
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
-    def test_should_return_none_when_zkb_does_not_return_json(
-        self, requests_mocker, mock_esi, mock_cache
-    ):
-        # given
-        requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=200, text="this is not JSON"
-        )
-        # when
-        killmail = fetch_killmail_from_redisq()
-        # then
-        self.assertIsNone(killmail)
-
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "Voltron9000")
-    def test_should_have_queue_id_in_request(
-        self, requests_mocker, mock_esi, mock_cache
-    ):
-        # given
-        requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
-        )
-        # when
-        fetch_killmail_from_redisq()
-        # then
-        qs = requests_mocker.last_request.qs
-        self.assertIn("queueID", qs)
-        queue_id = qs["queueID"]
-        self.assertEqual(len(queue_id), 1)
-        self.assertEqual(queue_id[0], "Voltron9000")
-
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "")
-    def test_should_abort_when_no_queue_id_defined(
-        self, requests_mocker, mock_esi, mock_cache
-    ):
-        # given
-        requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
-        )
-        # when/then
-        with self.assertRaises(ImproperlyConfigured):
-            fetch_killmail_from_redisq()
-
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "Möchtegern")
-    def test_should_urlize_queue_ids(self, requests_mocker, mock_esi, mock_cache):
-        # given
-        requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
-        )
-        # when
-        fetch_killmail_from_redisq()
-        # then
-        qs = requests_mocker.last_request.qs
-        self.assertIn("queueID", qs)
-        queue_id = qs["queueID"]
-        self.assertEqual(len(queue_id), 1)
-        self.assertEqual(queue_id[0], "M%C3%B6chtegern")
-
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "alpha,bravo")
-    def test_should_not_accept_list_for_queue_id(
-        self, requests_mocker, mock_esi, mock_cache
-    ):
-        # given
-        requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
-        )
-        # when/then
-        with self.assertRaises(ImproperlyConfigured):
-            fetch_killmail_from_redisq()
-
-    @patch(MODULE_PATH + ".KILLTRACKER_QUEUE_ID", "dummy")
-    def test_should_wait_until_next_slot_if_needed(
-        self, requests_mocker, mock_esi, mock_cache
-    ):
-        # given
-        mock_cache.set(_KEY_LAST_REQUEST, now())
-        requests_mocker.register_uri(
-            "GET", _ZKB_REDISQ_URL, status_code=200, json={"package": None}
+            "https://r2z2.zkillboard.com/ephemeral/12345.json",
+            status_code=200,
+            json=r2z2_data()[10000001],
         )
         # when
         with patch(MODULE_PATH + ".sleep") as mock_sleep:
-            killmail = fetch_killmail_from_redisq()
+            killmail = zkb.fetch_killmail_from_r2z2()
             # then
-            self.assertIsNone(killmail)
+            self.assertEqual(killmail.id, 10000001)
             self.assertTrue(mock_sleep.called)
 
 
@@ -402,7 +334,7 @@ class TestCreateFromZkbApi(NoSocketsTestCase):
         killmail_id = 10000001
         killmail_data = killmails_data()[killmail_id]
         zkb_api_data = [
-            {"killmail_id": killmail_data["killID"], "zkb": killmail_data["zkb"]}
+            {"killmail_id": killmail_data["killmail_id"], "zkb": killmail_data["zkb"]}
         ]
         requests_mocker.register_uri(
             "GET",
@@ -411,7 +343,7 @@ class TestCreateFromZkbApi(NoSocketsTestCase):
             json=zkb_api_data,
         )
         mock_esi.client.Killmails.get_killmails_killmail_id_killmail_hash.return_value = BravadoOperationStub(
-            killmail_data["killmail"]
+            killmail_data["esi"]
         )
 
         killmail = fetch_killmail_from_api(killmail_id)
@@ -446,7 +378,7 @@ class TestCreateFromZkbApi(NoSocketsTestCase):
 
 
 class CacheFake2(CacheFake):
-    def delete_pattern(self, pattern: str) -> None:
+    def delete_pattern(self, pattern: str, itersize=None) -> None:
         keys = []
         for k in self._cache:
             if fnmatch.fnmatch(k, pattern):

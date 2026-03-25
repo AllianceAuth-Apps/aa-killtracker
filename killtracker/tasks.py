@@ -64,13 +64,9 @@ def run_killtracker(self: Task) -> int:
 
         km = None
         try:
-            km = zkb.fetch_killmail_from_redisq()
+            km = zkb.fetch_killmail_from_r2z2()
 
-        except zkb.ZKBRedisQShuttingDownWarning:
-            logger.info("Ignoring shutdown warning from ZKB")
-            continue
-
-        except zkb.ZKBTooManyRequestsError as exc:
+        except zkb.R2Z2TooManyRequestsError as exc:
             seconds = (exc.retry_at - now()).total_seconds()
             if seconds < 0:
                 break

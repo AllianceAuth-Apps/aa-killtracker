@@ -23,12 +23,17 @@ def _load_json_from_file(filename: str) -> dict:
     return data
 
 
-def _load_redisq_data() -> dict:
+def _load_r2z2_data() -> dict:
     data = {}
     for obj in _load_json_from_file("killmails"):
-        killmail_id = obj["killID"]
+        killmail_id = obj["killmail_id"]
+        obj["esi"]["killmail_id"] = killmail_id
+        obj["esi"]["killmail_time"] = dt.datetime.now(dt.timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         hash = md5(str(killmail_id).encode("utf8")).hexdigest()
         obj["zkb"]["hash"] = hash
+        obj["hash"] = hash
         href = f"https://esi.evetech.net/v1/killmails/{killmail_id}/{hash}/"
         obj["zkb"]["href"] = href
         data[killmail_id] = obj
@@ -39,9 +44,9 @@ def _load_redisq_data() -> dict:
 def _load_killmails_data() -> dict:
     data = {}
     for obj in _load_json_from_file("killmails"):
-        killmail_id = obj["killID"]
-        obj["killmail"]["killmail_id"] = killmail_id
-        obj["killmail"]["killmail_time"] = dt.datetime.now(dt.timezone.utc)
+        killmail_id = obj["killmail_id"]
+        obj["esi"]["killmail_id"] = killmail_id
+        obj["esi"]["killmail_time"] = dt.datetime.now(dt.timezone.utc)
         hash = md5(str(killmail_id).encode("utf8")).hexdigest()
         obj["zkb"]["hash"] = hash
         href = f"https://esi.evetech.net/v1/killmails/{killmail_id}/{hash}/"
@@ -52,14 +57,14 @@ def _load_killmails_data() -> dict:
 
 
 _killmails_data = _load_killmails_data()
-_redisq_data = _load_redisq_data()
+_r2z2_data = _load_r2z2_data()
 eve_entities_data = _load_json_from_file("eveentities")
 _eve_alliances_data = _load_json_from_file("evealliances")
 _eve_corporations_data = _load_json_from_file("evecorporations")
 
 
-def redisq_data() -> dict:
-    return deepcopy(_redisq_data)
+def r2z2_data() -> dict:
+    return deepcopy(_r2z2_data)
 
 
 def killmails_data() -> dict:
@@ -115,18 +120,14 @@ def load_eve_killmails(killmail_ids: set = None) -> None:
     EveKillmail.objects.all().delete()
     for killmail_id, item in _killmails_data.items():
         if not killmail_ids or killmail_id in killmail_ids:
-            km = Killmail.create_from_zkb_data(
-                killmail_id, item["killmail"], item["zkb"]
-            )
+            km = Killmail.create_from_zkb_data(killmail_id, item["esi"], item["zkb"])
             EveKillmail.objects.create_from_killmail(km)
 
 
 def load_killmail(killmail_id: int) -> Killmail:
     for item_id, item in _killmails_data.items():
         if killmail_id == item_id:
-            return Killmail.create_from_zkb_data(
-                killmail_id, item["killmail"], item["zkb"]
-            )
+            return Killmail.create_from_zkb_data(killmail_id, item["esi"], item["zkb"])
 
     raise ValueError(f"Killmail with id {killmail_id} not found.")
 
