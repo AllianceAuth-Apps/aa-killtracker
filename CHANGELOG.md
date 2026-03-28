@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
-## [1.4.0b1] - 2026-03-25
+## [1.4.0] - 2026-03-28
 
 This release replaces the deprecated RedisQ API with the new
 [R2Z2 API](https://github.com/zKillboard/zKillboard/wiki/API-(R2Z2))
