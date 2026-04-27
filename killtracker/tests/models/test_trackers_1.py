@@ -846,9 +846,9 @@ class TestTrackerCalculateTrackerInfo(LoadTestDataMixin, NoSocketsTestCase):
         killmail = self.tracker.process_killmail(load_killmail(10006004))
         self.assertIsNone(killmail.tracker_info.main_org)
 
-    def test_should_ignore_os_error_esi_route_endpoint(self, mock_jumps_to):
+    def test_should_handle_exceptions_from_eveuniverse(self, mock_jumps_to):
         # given
-        mock_jumps_to.side_effect = OSError
+        mock_jumps_to.side_effect = RuntimeError
         self.tracker.origin_solar_system_id = 30003067
         self.tracker.save()
         # when

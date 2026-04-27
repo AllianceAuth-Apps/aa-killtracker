@@ -682,9 +682,18 @@ class Tracker(models.Model):
         distance = meters_to_ly(distance_raw) if distance_raw is not None else None
         try:
             jumps = self.origin_solar_system.jumps_to(solar_system)
-        except OSError:
-            # Currently all those exceptions are already captures in eveuniverse,
-            # but this shall remain for when the workaround is fixed
+        except Exception as ex:  # pylint: disable=W0718
+            # This is necessary to catch ESI error (e.g. rate limited) from both
+            # Swagger and OpenAPI client
+            # Should be restricted to specific OpenAPI errors
+            # once Swagger support is removed
+            logger.warning(
+                "%s: Failed to get route from eveuniverse from %s to %s: %s",
+                self,
+                self.origin_solar_system,
+                solar_system,
+                ex,
+            )
             jumps = None
         return (jumps, distance)
 
