@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [1.4.1] - 2026-04-27
+
+## Fixed
+
+- HTTP Errors from eveuniverse not handled correctly when coming from OpenAPI client
+
 ## [1.4.0] - 2026-03-28
 
 This release replaces the deprecated RedisQ API with the new
