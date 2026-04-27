@@ -282,7 +282,7 @@ def send_test_message_to_webhook(webhook_pk: int, count: int = 1) -> None:
         return
 
     for num in range(count):
-        num_str = f"{num+1}/{count} " if count > 1 else ""
+        num_str = f"{num + 1}/{count} " if count > 1 else ""
         message = DiscordMessage(content=f"Test message {num_str}from {__title__}.")
         webhook.enqueue_message(message)
 
