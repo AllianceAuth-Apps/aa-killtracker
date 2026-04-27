@@ -2,8 +2,6 @@ import json
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
-from bravado.exception import HTTPNotFound
-
 from django.test import TestCase
 from django.utils.timezone import now
 from eveuniverse.models import (
@@ -16,7 +14,6 @@ from eveuniverse.models import (
 
 from allianceauth.eveonline.models import EveAllianceInfo
 from allianceauth.tests.auth_utils import AuthUtils
-from app_utils.esi_testing import BravadoOperationStub
 from app_utils.testdata_factories import (
     EveAllianceInfoFactory,
     EveCorporationInfoFactory,
@@ -37,29 +34,6 @@ from killtracker.tests.testdata.factories import (
 from killtracker.tests.testdata.helpers import LoadTestDataMixin, load_killmail
 
 MODELS_PATH = "killtracker.models"
-
-
-def esi_get_route_origin_destination(origin, destination, **kwargs) -> list:
-    routes = {
-        30003067: {
-            30003087: [
-                30003067,
-                30003068,
-                30003069,
-                30003070,
-                30003071,
-                30003091,
-                30003086,
-                30003087,
-            ],
-            30003070: [30003067, 30003068, 30003069, 30003070],
-            30003067: [30003067],
-        },
-    }
-    if origin in routes and destination in routes[origin]:
-        return BravadoOperationStub(routes[origin][destination])
-    else:
-        raise HTTPNotFound(Mock(**{"response.status_code": 404}))
 
 
 class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
@@ -149,11 +123,20 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
         expected = {10000002, 10000003, 10000004}
         self.assertSetEqual(results, expected)
 
-    @patch("eveuniverse.models.universe_2.esi")
-    def test_can_filter_max_jumps(self, mock_esi):
-        mock_esi.client.Routes.get_route_origin_destination.side_effect = (
-            esi_get_route_origin_destination
-        )
+    @patch(MODELS_PATH + ".trackers.Tracker._calc_distances")
+    def test_can_filter_max_jumps(self, mock_calc_distances: Mock):
+        def calc_distances(solar_system: EveSolarSystem):
+            match solar_system.id:
+                case 30003087:
+                    return 99, 0
+                case 30003070:
+                    return 1, 0
+                case 30003067:
+                    return 1, 0
+
+            raise RuntimeError(f"Not found: {solar_system.id}")
+
+        mock_calc_distances.side_effect = calc_distances
 
         killmail_ids = {10000101, 10000102, 10000103}
         tracker = TrackerFactory(
@@ -165,11 +148,20 @@ class TestTrackerCalculate(LoadTestDataMixin, NoSocketsTestCase):
         expected = {10000102, 10000103}
         self.assertSetEqual(results, expected)
 
-    @patch("eveuniverse.models.universe_2.esi")
-    def test_can_filter_max_distance(self, mock_esi):
-        mock_esi.client.Routes.get_route_origin_destination.side_effect = (
-            esi_get_route_origin_destination
-        )
+    @patch(MODELS_PATH + ".trackers.Tracker._calc_distances")
+    def test_can_filter_max_distance(self, mock_calc_distances: Mock):
+        def calc_distances(solar_system: EveSolarSystem):
+            match solar_system.id:
+                case 30003087:
+                    return 0, 99
+                case 30003070:
+                    return 0, 1
+                case 30003067:
+                    return 0, 1
+
+            raise RuntimeError(f"Not found: {solar_system.id}")
+
+        mock_calc_distances.side_effect = calc_distances
 
         killmail_ids = {10000101, 10000102, 10000103}
         tracker = TrackerFactory(
@@ -865,11 +857,9 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
         self.webhook_1._main_queue.clear()
 
     @patch(MODELS_PATH + ".webhooks.KILLTRACKER_WEBHOOK_SET_AVATAR", True)
-    @patch("eveuniverse.models.universe_2.esi")
-    def test_normal(self, mock_esi):
-        mock_esi.client.Routes.get_route_origin_destination.side_effect = (
-            esi_get_route_origin_destination
-        )
+    @patch(MODELS_PATH + ".trackers.Tracker._calc_distances")
+    def test_normal(self, mock_calc_distances: Mock):
+        mock_calc_distances.return_value = 0, 0
         self.tracker.origin_solar_system_id = 30003067
         self.tracker.save()
         svipul = EveType.objects.get(id=34562)
@@ -892,11 +882,9 @@ class TestTrackerEnqueueKillmail(LoadTestDataMixin, TestCase):
         self.assertIn("Tracked ship types", embed["description"])
 
     @patch(MODELS_PATH + ".webhooks.KILLTRACKER_WEBHOOK_SET_AVATAR", False)
-    @patch("eveuniverse.models.universe_2.esi")
-    def test_disabled_avatar(self, mock_esi):
-        mock_esi.client.Routes.get_route_origin_destination.side_effect = (
-            esi_get_route_origin_destination
-        )
+    @patch(MODELS_PATH + ".trackers.Tracker._calc_distances")
+    def test_disabled_avatar(self, mock_calc_distances: Mock):
+        mock_calc_distances.return_value = 0, 0
         self.tracker.origin_solar_system_id = 30003067
         self.tracker.save()
         svipul = EveType.objects.get(id=34562)

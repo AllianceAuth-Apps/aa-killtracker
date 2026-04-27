@@ -3,13 +3,14 @@ import fnmatch
 import unittest
 from unittest.mock import patch
 
+import pook
 import requests
 import requests_mock
 
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils.timezone import now
 
-from app_utils.esi_testing import BravadoOperationStub
 from app_utils.testing import CacheFake, NoSocketsTestCase
 
 from killtracker.core import zkb
@@ -22,7 +23,7 @@ from killtracker.core.zkb import (
 )
 from killtracker.tests import CacheStub
 from killtracker.tests.testdata.factories import KillmailFactory
-from killtracker.tests.testdata.helpers import killmails_data, load_killmail, r2z2_data
+from killtracker.tests.testdata.helpers import load_killmail, r2z2_data
 
 MODULE_PATH = "killtracker.core.zkb"
 unittest.util._MAX_LENGTH = 1000
@@ -327,54 +328,122 @@ class TestEntityCount(NoSocketsTestCase):
         self.assertTrue(corporation.is_corporation)
 
 
-@patch(MODULE_PATH + ".cache", CacheStub())
-@patch(MODULE_PATH + ".esi")
-@requests_mock.Mocker()
-class TestCreateFromZkbApi(NoSocketsTestCase):
-    def test_normal(self, mock_esi, requests_mocker):
-        killmail_id = 10000001
-        killmail_data = killmails_data()[killmail_id]
-        zkb_api_data = [
-            {"killmail_id": killmail_data["killmail_id"], "zkb": killmail_data["zkb"]}
-        ]
-        requests_mocker.register_uri(
-            "GET",
+class TestCreateFromZkbApi(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cache.clear()
+
+    @patch(MODULE_PATH + ".cache", CacheStub())
+    @pook.on
+    def test_normal(self):
+        killmail_id = 135067522
+        attacker_alliance_id = 99009567
+        attacker_character_id = 211150393
+        attacker_corporation_id = 98407493
+        attacker_security_status = 5
+        attacker_ship_type_id = 47270
+        damage_done = 78928
+        damage_taken = 78928
+        killmail_hash = "8d2a4c0779bc067e1ec5851feb086c82099cf7dc"
+        killmail_time = dt.datetime(2026, 4, 27, 18, 44, 42, 0, tzinfo=dt.timezone.utc)
+        solar_system_id = 30001980
+        victim_alliance_id = 99003581
+        victim_character_id = 2122649889
+        victim_corporation_id = 98598862
+        victim_faction_id = 500011
+        victim_ship_type_id = 24688
+        weapon_type_id = 47919
+        location_id = 50004638
+        fitted_value = 236574722.76
+        total_value = 268883360.72
+        points = 190
+        pook.get(
             f"{_ZKB_API_URL}killID/{killmail_id}/",
-            status_code=200,
-            json=zkb_api_data,
+            reply=200,
+            response_json=[
+                {
+                    "killmail_id": killmail_id,
+                    "zkb": {
+                        "locationID": location_id,
+                        "hash": killmail_hash,
+                        "fittedValue": fitted_value,
+                        "droppedValue": 52914789.03,
+                        "destroyedValue": 215968571.69,
+                        "totalValue": total_value,
+                        "points": points,
+                        "npc": False,
+                        "solo": True,
+                        "awox": False,
+                        "labels": ["tz:eu", "cat:6", "solo", "pvp", "loc:nullsec"],
+                    },
+                }
+            ],
         )
-        mock_esi.client.Killmails.get_killmails_killmail_id_killmail_hash.return_value = BravadoOperationStub(
-            killmail_data["esi"]
+        pook.get(
+            f"https://esi.evetech.net/latest/killmails/{killmail_id}/{killmail_hash}/",
+            reply=200,
+            response_json={
+                "attackers": [
+                    {
+                        "alliance_id": attacker_alliance_id,
+                        "character_id": attacker_character_id,
+                        "corporation_id": attacker_corporation_id,
+                        "damage_done": damage_done,
+                        "final_blow": True,
+                        "security_status": attacker_security_status,
+                        "ship_type_id": attacker_ship_type_id,
+                        "weapon_type_id": weapon_type_id,
+                    }
+                ],
+                "killmail_id": killmail_id,
+                "killmail_time": killmail_time.isoformat(),
+                "solar_system_id": solar_system_id,
+                "victim": {
+                    "alliance_id": victim_alliance_id,
+                    "character_id": victim_character_id,
+                    "corporation_id": victim_corporation_id,
+                    "damage_taken": damage_taken,
+                    "faction_id": victim_faction_id,
+                    "items": [],
+                    "position": {
+                        "x": 3074726066717.27,
+                        "y": 356699410448.6995,
+                        "z": -383193277301.9448,
+                    },
+                    "ship_type_id": victim_ship_type_id,
+                },
+            },
         )
 
         killmail = fetch_killmail_from_api(killmail_id)
         self.assertIsNotNone(killmail)
         self.assertEqual(killmail.id, killmail_id)
-        self.assertAlmostEqual(killmail.time, now(), delta=dt.timedelta(seconds=120))
+        self.assertEqual(killmail.time, killmail_time)
 
-        self.assertEqual(killmail.victim.alliance_id, 3011)
-        self.assertEqual(killmail.victim.character_id, 1011)
-        self.assertEqual(killmail.victim.corporation_id, 2011)
-        self.assertEqual(killmail.victim.damage_taken, 434)
-        self.assertEqual(killmail.victim.ship_type_id, 603)
+        self.assertEqual(killmail.victim.alliance_id, victim_alliance_id)
+        self.assertEqual(killmail.victim.character_id, victim_character_id)
+        self.assertEqual(killmail.victim.corporation_id, victim_corporation_id)
+        self.assertEqual(killmail.victim.damage_taken, damage_taken)
+        self.assertEqual(killmail.victim.ship_type_id, victim_ship_type_id)
 
-        self.assertEqual(len(killmail.attackers), 3)
+        self.assertEqual(len(killmail.attackers), 1)
 
         attacker_1 = killmail.attackers[0]
-        self.assertEqual(attacker_1.alliance_id, 3001)
-        self.assertEqual(attacker_1.character_id, 1001)
-        self.assertEqual(attacker_1.corporation_id, 2001)
-        self.assertEqual(attacker_1.damage_done, 434)
-        self.assertEqual(attacker_1.security_status, -10)
-        self.assertEqual(attacker_1.ship_type_id, 34562)
-        self.assertEqual(attacker_1.weapon_type_id, 2977)
+        self.assertEqual(attacker_1.alliance_id, attacker_alliance_id)
+        self.assertEqual(attacker_1.character_id, attacker_character_id)
+        self.assertEqual(attacker_1.corporation_id, attacker_corporation_id)
+        self.assertEqual(attacker_1.damage_done, damage_done)
+        self.assertEqual(attacker_1.security_status, attacker_security_status)
+        self.assertEqual(attacker_1.ship_type_id, attacker_ship_type_id)
+        self.assertEqual(attacker_1.weapon_type_id, weapon_type_id)
 
-        self.assertEqual(killmail.zkb.location_id, 50012306)
-        self.assertEqual(killmail.zkb.fitted_value, 10000)
-        self.assertEqual(killmail.zkb.total_value, 10000)
-        self.assertEqual(killmail.zkb.points, 1)
+        self.assertEqual(killmail.zkb.location_id, location_id)
+        self.assertEqual(killmail.zkb.fitted_value, fitted_value)
+        self.assertEqual(killmail.zkb.total_value, total_value)
+        self.assertEqual(killmail.zkb.points, points)
         self.assertFalse(killmail.zkb.is_npc)
-        self.assertFalse(killmail.zkb.is_solo)
+        self.assertTrue(killmail.zkb.is_solo)
         self.assertFalse(killmail.zkb.is_awox)
 
 
