@@ -21,7 +21,6 @@ from eveuniverse.models import EveType
 
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.json import JSONDateTimeDecoder, JSONDateTimeEncoder
-from app_utils.logging import LoggerAddTag
 
 from killtracker import USER_AGENT_TEXT, __title__
 from killtracker.app_settings import (
@@ -44,7 +43,7 @@ _ZKB_API_URL = "https://zkillboard.com/api/"
 _R2Z2_BASE_URL = "https://r2z2.zkillboard.com/ephemeral/"
 _R2Z2_SEQUENCE_TIMEOUT = 24 * 3600  # 24 hrs
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 class R2Z2TooManyRequestsError(Exception):
@@ -472,6 +471,7 @@ class Killmail(_KillmailBase):
     @classmethod
     def _extract_attackers(cls, killmail_data: dict) -> List[KillmailAttacker]:
         attackers = []
+        attacker_data: dict
         for attacker_data in killmail_data.get("attackers", []):
             params = {}
             for prop in KillmailAttacker.ENTITY_PROPS + [
@@ -481,7 +481,7 @@ class Killmail(_KillmailBase):
                 if prop in attacker_data:
                     params[prop] = attacker_data[prop]
 
-            if v := attacker_data["final_blow"]:
+            if v := attacker_data.get("final_blow", False):
                 params["is_final_blow"] = v
 
             attackers.append(KillmailAttacker(**params))
@@ -500,7 +500,7 @@ class Killmail(_KillmailBase):
             ("solo", "is_solo"),
             ("awox", "is_awox"),
         ):
-            if v := data.get(prop):
+            if (v := data.get(prop)) is not None:
                 if mapping:
                     params[mapping] = v
                 else:
@@ -673,12 +673,14 @@ def _fetch_killmail_from_esi(
     killmail_id: int, killmail_zkb: dict
 ) -> Optional["Killmail"]:
     """Fetch and return a Killmail from ESI."""
-    killmail: dict = esi.client.Killmails.get_killmails_killmail_id_killmail_hash(
+    killmail = esi.client.Killmails.GetKillmailsKillmailIdKillmailHash(
         killmail_id=killmail_id,
         killmail_hash=killmail_zkb["hash"],
-    ).results(ignore_cache=True)
+    ).result(use_cache=False, use_etag=False)
     if not killmail:
         logger.warning("ESI did not return any data for killmail ID %d", killmail_id)
         return None
 
-    return Killmail.create_from_zkb_data(killmail_id, killmail, killmail_zkb)
+    return Killmail.create_from_zkb_data(
+        killmail_id, killmail.model_dump(), killmail_zkb
+    )

@@ -4,31 +4,25 @@ from unittest.mock import patch
 from requests.exceptions import HTTPError
 
 from django.contrib.auth.models import Group
-from django.test import TestCase
 
 from app_utils.django import app_labels
+from app_utils.testing import NoSocketsTestCase
 
 from killtracker.core.zkb import Killmail
 from killtracker.models import Tracker
-from killtracker.tests.testdata.factories import TrackerFactory
-from killtracker.tests.testdata.helpers import LoadTestDataMixin, load_killmail
+from killtracker.tests.testdata.factories import KillmailFactory, TrackerFactory
 
 MODULE_PATH = "killtracker.core.trackers"
 
 if "discord" in app_labels():
 
     @patch(MODULE_PATH + "._import_discord_user")
-    class TestGroupPings(LoadTestDataMixin, TestCase):
+    class TestGroupPings(NoSocketsTestCase):
         @classmethod
         def setUpClass(cls):
             super().setUpClass()
             cls.group_1 = Group.objects.create(name="Dummy Group 1")
             cls.group_2 = Group.objects.create(name="Dummy Group 2")
-
-        def setUp(self):
-            self.tracker = TrackerFactory(
-                webhook=self.webhook_1, exclude_null_sec=True, exclude_w_space=True
-            )
 
         @staticmethod
         def _my_group_to_role(group: Group) -> dict:
@@ -38,78 +32,89 @@ if "discord" in app_labels():
             return {"id": group.pk, "name": group.name}
 
         def test_can_ping_one_group(self, mock_import_discord_user):
+            # given
             mock_import_discord_user.return_value.objects.group_to_role.side_effect = (
                 self._my_group_to_role
             )
-            self.tracker.ping_groups.add(self.group_1)
-            killmail = self.tracker.process_killmail(load_killmail(10000101))
+            tracker = TrackerFactory()
+            tracker.ping_groups.add(self.group_1)
+            killmail = tracker.process_killmail(KillmailFactory())
 
-            self.tracker.generate_killmail_message(
-                Killmail.from_json(killmail.asjson())
-            )
+            # when
+            tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
+            # then
             self.assertTrue(
                 mock_import_discord_user.return_value.objects.group_to_role.called
             )
-            self.assertEqual(self.webhook_1._main_queue.size(), 1)
-            message = json.loads(self.webhook_1._main_queue.dequeue())
+            self.assertEqual(tracker.webhook._main_queue.size(), 1)
+            message = json.loads(tracker.webhook._main_queue.dequeue())
             self.assertIn(f"<@&{self.group_1.pk}>", message["content"])
 
         def test_can_ping_multiple_groups(self, mock_import_discord_user):
+            # given
             mock_import_discord_user.return_value.objects.group_to_role.side_effect = (
                 self._my_group_to_role
             )
-            self.tracker.ping_groups.add(self.group_1)
-            self.tracker.ping_groups.add(self.group_2)
+            tracker = TrackerFactory()
+            tracker.ping_groups.add(self.group_1)
+            tracker.ping_groups.add(self.group_2)
+            killmail = tracker.process_killmail(KillmailFactory())
 
-            killmail = self.tracker.process_killmail(load_killmail(10000101))
-            self.tracker.generate_killmail_message(
-                Killmail.from_json(killmail.asjson())
-            )
+            # when
+            tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
+            # then
             self.assertTrue(
                 mock_import_discord_user.return_value.objects.group_to_role.called
             )
-            self.assertEqual(self.webhook_1._main_queue.size(), 1)
-            message = json.loads(self.webhook_1._main_queue.dequeue())
+            self.assertEqual(tracker.webhook._main_queue.size(), 1)
+            message = json.loads(tracker.webhook._main_queue.dequeue())
             self.assertIn(f"<@&{self.group_1.pk}>", message["content"])
             self.assertIn(f"<@&{self.group_2.pk}>", message["content"])
 
         def test_can_combine_with_channel_ping(self, mock_import_discord_user):
+            # given
             mock_import_discord_user.return_value.objects.group_to_role.side_effect = (
                 self._my_group_to_role
             )
-            self.tracker.ping_groups.add(self.group_1)
-            self.tracker.ping_type = Tracker.ChannelPingType.HERE
-            self.tracker.save()
+            tracker = TrackerFactory()
+            tracker.ping_groups.add(self.group_1)
+            tracker.ping_type = Tracker.ChannelPingType.HERE
+            tracker.save()
+            killmail = tracker.process_killmail(KillmailFactory())
 
-            killmail = self.tracker.process_killmail(load_killmail(10000101))
-            self.tracker.generate_killmail_message(
-                Killmail.from_json(killmail.asjson())
-            )
+            # when
+            tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
+            # then
             self.assertTrue(
                 mock_import_discord_user.return_value.objects.group_to_role.called
             )
-            self.assertEqual(self.webhook_1._main_queue.size(), 1)
-            message = json.loads(self.webhook_1._main_queue.dequeue())
+            self.assertEqual(tracker.webhook._main_queue.size(), 1)
+            message = json.loads(tracker.webhook._main_queue.dequeue())
             self.assertIn(f"<@&{self.group_1.pk}>", message["content"])
             self.assertIn("@here", message["content"])
 
         def test_can_handle_error_from_discord(self, mock_import_discord_user):
+            # given
             mock_import_discord_user.return_value.objects.group_to_role.side_effect = (
                 HTTPError
             )
-            self.tracker.ping_groups.add(self.group_1)
+            tracker = TrackerFactory()
+            tracker.ping_groups.add(self.group_1)
+            killmail = tracker.process_killmail(KillmailFactory())
 
-            killmail = self.tracker.process_killmail(load_killmail(10000101))
-            self.tracker.generate_killmail_message(
-                Killmail.from_json(killmail.asjson())
-            )
+            # when
+            tracker.generate_killmail_message(Killmail.from_json(killmail.asjson()))
 
+            # then
             self.assertTrue(
                 mock_import_discord_user.return_value.objects.group_to_role.called
             )
-            self.assertEqual(self.webhook_1._main_queue.size(), 1)
-            message = json.loads(self.webhook_1._main_queue.dequeue())
+            self.assertEqual(tracker.webhook._main_queue.size(), 1)
+            message = json.loads(tracker.webhook._main_queue.dequeue())
             self.assertNotIn(f"<@&{self.group_1.pk}>", message["content"])
+
+
+# ---

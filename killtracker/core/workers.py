@@ -9,13 +9,10 @@ from celery import Task
 from django.core.cache import cache
 
 from allianceauth.services.hooks import get_extension_logger
-from app_utils.logging import LoggerAddTag
-
-from killtracker import __title__
 
 _TIMEOUT_SECONDS = 120
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 def state_reset(hostname: str) -> None:

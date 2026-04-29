@@ -3,7 +3,7 @@
 # pylint: disable = missing-class-docstring
 
 from datetime import timedelta
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from django.db import models, transaction
 from django.utils.timezone import now
@@ -11,13 +11,11 @@ from eveuniverse.models import EveEntity
 
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.caching import ObjectCacheMixin
-from app_utils.logging import LoggerAddTag
 
-from killtracker import __title__
 from killtracker.app_settings import KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS
 from killtracker.core.zkb import Killmail, _KillmailCharacter
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 class EveKillmailQuerySet(models.QuerySet):
@@ -35,12 +33,12 @@ class EveKillmailQuerySet(models.QuerySet):
 
 
 class EveKillmailBaseManager(models.Manager):
-    def delete_stale(self) -> Optional[Tuple[int, Dict[str, int]]]:
+    def delete_stale(self) -> Tuple[int, Dict[str, int]]:
         """deletes all stale killmail"""
         if KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS > 0:
             deadline = now() - timedelta(days=KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS)
             return self.filter(time__lt=deadline).delete()
-        return None
+        return 0, {}
 
     def create_from_killmail(self, killmail: Killmail, resolve_ids=True):
         """create a new EveKillmail from a Killmail object and returns it

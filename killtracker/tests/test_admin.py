@@ -3,49 +3,31 @@ from django.test import TestCase
 from django.urls import reverse
 from django_webtest import WebTest
 
-from allianceauth.eveonline.models import EveCorporationInfo
-from app_utils.testdata_factories import UserFactory
-
-from killtracker.models import Tracker, Webhook
-
-from .testdata.factories import TrackerFactory, WebhookFactory
-from .testdata.helpers import LoadTestDataMixin
+from killtracker.models import Tracker
+from killtracker.tests.testdata.factories import TrackerFactory
 
 
-class TestTrackerChangeList(LoadTestDataMixin, WebTest):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.user = User.objects.create_superuser(
+class TestTrackerChangeList(TestCase):
+    def test_can_open_page_normally(self):
+        # given
+        user = User.objects.create_superuser(
             "Bruce_Wayne", "bruce@example.com", "password"
         )
+        TrackerFactory()
+        self.client.force_login(user)
 
-    def setUp(self) -> None:
-        TrackerFactory(webhook=self.webhook_1, exclude_high_sec=True)
-        TrackerFactory(
-            webhook=self.webhook_1,
-            origin_solar_system_id=30003067,
-            require_max_jumps=3,
-        )
-        tracker = TrackerFactory(webhook=self.webhook_1)
-        tracker.exclude_attacker_corporations.add(
-            EveCorporationInfo.objects.get(corporation_id=2001)
-        )
+        # when
+        add_page = self.client.get(reverse("admin:killtracker_tracker_changelist"))
 
-    def test_can_open_page_normally(self):
-        # login
-        self.app.set_user(self.user)
-
-        # user tries to add new notification rule
-        add_page = self.app.get(reverse("admin:killtracker_tracker_changelist"))
+        # then
         self.assertEqual(add_page.status_code, 200)
 
 
-class TestTrackerValidations(LoadTestDataMixin, WebTest):
+class TestTrackerValidations(WebTest):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.webhook = Webhook.objects.create(name="Dummy", url="http://www.example.com")
+        cls.tracker = TrackerFactory()
         cls.user = User.objects.create_superuser(
             "Bruce_Wayne", "bruce@example.com", "password"
         )
@@ -64,7 +46,7 @@ class TestTrackerValidations(LoadTestDataMixin, WebTest):
         self.assertEqual(add_page.status_code, 200)
         form = add_page.forms["tracker_form"]
         form["name"] = "Test Tracker"
-        form["webhook"] = self.webhook_1.pk
+        form["webhook"] = self.tracker.webhook.pk
         return form
 
     def test_no_errors(self):
@@ -131,22 +113,12 @@ class TestTrackerValidations(LoadTestDataMixin, WebTest):
         self.assertIn("Please correct the error below", response.text)
         self.assertEqual(Tracker.objects.count(), 0)
 
-
-class TestTrackerValidations2(TestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.user = UserFactory(is_staff=True, is_superuser=True)
-        cls.webhook = WebhookFactory()
-        cls.url_add = reverse("admin:killtracker_tracker_add")
-        cls.url_changelist = reverse("admin:killtracker_tracker_changelist")
-
     def test_should_add_new_tracker(self):
         # given
         self.client.force_login(self.user)
         data = {
             "name": "Dummy",
-            "webhook": self.webhook.pk,
+            "webhook": self.tracker.webhook.pk,
             "_save": "Save",
             "is_enabled": "on",
             "color": "#000000",

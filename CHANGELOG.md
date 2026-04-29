@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [2.0.0a1] - 2026-04-29
+
+This release adds support for AA5 and contains breaking changes.
+
+## Changed
+
+- Breaking change: Removed support for Python 3.8 & 3.9
+- Added support for AA 5
+- Migrated ESI client to OpenAPI
+- Removed logger tag
+- Modernized test suite
+
+## Fixed
+
+- is_final_flow, is_npc, is_awox, is_solo not detected correctly from ZKB killmail
+- filter "exclude_victim_state" not working
+
 ## [1.4.1] - 2026-04-27
 
 ## Fixed

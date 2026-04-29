@@ -1,12 +1,18 @@
 """ESI provider for killtracker."""
 
-from esi.clients import EsiClientProvider
+from pathlib import Path
 
-from allianceauth.services.hooks import get_extension_logger
-from app_utils.logging import LoggerAddTag
+from esi.openapi_clients import ESIClientProvider
 
-from killtracker import USER_AGENT_TEXT, __title__
+from . import __version__
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
-
-esi = EsiClientProvider(app_info_text=USER_AGENT_TEXT)
+spec_file = Path(__file__).parent / "openapi_2025-12-16.json"
+esi = ESIClientProvider(
+    compatibility_date="2025-12-16",
+    ua_appname="aa-killtracker",
+    ua_version=__version__,
+    operations=[
+        "GetKillmailsKillmailIdKillmailHash",
+    ],
+    spec_file=spec_file,
+)

@@ -15,15 +15,14 @@ from django.utils.timezone import now
 
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.json import JSONDateTimeDecoder, JSONDateTimeEncoder
-from app_utils.logging import LoggerAddTag
 
-from killtracker import APP_NAME, HOMEPAGE_URL, __title__, __version__
+from killtracker import APP_NAME, HOMEPAGE_URL, __version__
 from killtracker.app_settings import KILLTRACKER_DISCORD_SEND_DELAY
 from killtracker.core.helpers import datetime_or_none
 
 _DEFAULT_429_TIMEOUT = 600 * 1000  # milliseconds
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 class HTTPError(Exception):
