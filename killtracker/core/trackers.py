@@ -14,11 +14,9 @@ from eveuniverse.models import EveEntity, EveSolarSystem
 from allianceauth.eveonline.evelinks import dotlan, eveimageserver, zkillboard
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.django import app_labels
-from app_utils.logging import LoggerAddTag
 from app_utils.urls import static_file_absolute_url
 from app_utils.views import humanize_value
 
-from killtracker import __title__
 from killtracker.core.discord import DiscordMessage
 from killtracker.core.zkb import ZKB_KILLMAIL_BASEURL, Killmail, TrackerInfo
 
@@ -27,7 +25,7 @@ if TYPE_CHECKING:
 
 _ICON_SIZE = 128
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 def create_discord_message_from_killmail(

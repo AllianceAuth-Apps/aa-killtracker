@@ -5,12 +5,10 @@
 from celery import signals
 
 from allianceauth.services.hooks import get_extension_logger
-from app_utils.logging import LoggerAddTag
 
-from killtracker import __title__
 from killtracker.core import workers
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 @signals.worker_ready.connect

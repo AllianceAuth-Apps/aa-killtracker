@@ -36,6 +36,3 @@ check_complexity:
 
 graph_models:
 	python ../myauth/manage.py graph_models $(package) --arrow-shape normal -o $(appname)_models.png
-
-create_testdata:
-	python ../myauth/manage.py test $(package).tests.testdata.create_eveuniverse --keepdb -v 2

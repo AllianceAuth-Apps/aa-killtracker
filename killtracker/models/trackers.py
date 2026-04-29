@@ -23,9 +23,7 @@ from allianceauth.eveonline.models import (
     EveFactionInfo,
 )
 from allianceauth.services.hooks import get_extension_logger
-from app_utils.logging import LoggerAddTag
 
-from killtracker import __title__
 from killtracker.app_settings import KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER
 from killtracker.constants import EveCategoryId, EveGroupId
 from killtracker.core.trackers import create_discord_message_from_killmail
@@ -33,7 +31,7 @@ from killtracker.core.zkb import Killmail
 from killtracker.managers import TrackerManager
 from killtracker.models.webhooks import Webhook
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 def _require_attackers_ship_groups_query():
@@ -776,6 +774,12 @@ class Tracker(models.Model):
                 character_ownerships__character__character_id=(km.victim.character_id),
             ).exists()
 
+        if is_matching and self.exclude_victim_states.exists():
+            is_matching = not User.objects.filter(
+                profile__state__in=list(self.exclude_victim_states.all()),
+                character_ownerships__character__character_id=(km.victim.character_id),
+            ).exists()
+
         return is_matching
 
     def _match_attacker_ships(
@@ -908,4 +912,5 @@ class Tracker(models.Model):
         Returns the new queue size.
         """
         message = create_discord_message_from_killmail(self, km, intro_text)
-        return self.webhook.enqueue_message(message)
+        count = self.webhook.enqueue_message(message)
+        return count

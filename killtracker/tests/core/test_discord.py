@@ -2,8 +2,9 @@ import datetime as dt
 from unittest.mock import patch
 
 import dhooks_lite
-import requests_mock
+import pook
 
+from django.test import TestCase
 from django.utils.timezone import now
 
 from app_utils.testing import CacheFake, NoSocketsTestCase
@@ -50,9 +51,8 @@ class TestDiscordMessage(NoSocketsTestCase):
         self.assertEqual(o1, o2)
 
 
-@requests_mock.Mocker()
 @patch(MODULE_PATH + ".cache", new_callable=CacheFake)
-class TestWebhookSendMessage(NoSocketsTestCase):
+class TestWebhookSendMessage(TestCase):
     def setUp(self) -> None:
         self.name = "webhook"
         self.message = DiscordMessage(content="Test message")
@@ -75,109 +75,118 @@ class TestWebhookSendMessage(NoSocketsTestCase):
             },
         }
 
-    def test_when_send_ok_returns_true(self, requests_mocker, mock_cache):
+    @pook.on
+    def test_when_send_ok_returns_true(self, _mock_cache: CacheFake):
         # given
-        requests_mocker.register_uri(
-            "POST", self.url, status_code=200, json=self.message_api
-        )
+        pook.post(self.url, reply=200, response_json=self.message_api)
+
         # when
         got = send_message_to_webhook(
             name=self.name, url=self.url, message=self.message
         )
-        # then
-        self.assertEqual(got, 223704706495545344)
-        self.assertTrue(requests_mocker.called)
 
-    def test_should_ignore_invalid_key_for_last_request(
-        self, requests_mocker, mock_cache
-    ):
+        # then
+        self.assertTrue(pook.isdone())
+        self.assertEqual(got, 223704706495545344)
+
+    @pook.on
+    def test_should_ignore_invalid_key_for_last_request(self, mock_cache: CacheFake):
         # given
         mock_cache.set(_make_key_last_request(self.url), "invalid")
-        requests_mocker.register_uri(
-            "POST", self.url, status_code=200, json=self.message_api
-        )
+        pook.post(self.url, reply=200, response_json=self.message_api)
+
         # when
         got = send_message_to_webhook(
             name=self.name, url=self.url, message=self.message
         )
-        # then
-        self.assertEqual(got, 223704706495545344)
-        self.assertTrue(requests_mocker.called)
 
-    def test_should_ignore_invalid_key_for_retry_at(self, requests_mocker, mock_cache):
+        # then
+        self.assertTrue(pook.isdone())
+        self.assertEqual(got, 223704706495545344)
+
+    @pook.on
+    def test_should_ignore_invalid_key_for_retry_at(self, mock_cache: CacheFake):
         # given
         mock_cache.set(_make_key_retry_at(self.url), "invalid")
-        requests_mocker.register_uri(
-            "POST", self.url, status_code=200, json=self.message_api
-        )
+        pook.post(self.url, reply=200, response_json=self.message_api)
+
         # when
         got = send_message_to_webhook(
             name=self.name, url=self.url, message=self.message
         )
-        # then
-        self.assertEqual(got, 223704706495545344)
-        self.assertTrue(requests_mocker.called)
 
-    def test_when_send_not_ok_raise_error(self, requests_mocker, mock_cache):
+        # then
+        self.assertTrue(pook.isdone())
+        self.assertEqual(got, 223704706495545344)
+
+    @pook.on
+    def test_when_send_not_ok_raise_error(self, mock_cache: CacheFake):
         # given
-        requests_mocker.register_uri("POST", self.url, status_code=404)
+        pook.post(self.url, reply=404)
+
         # when
         with self.assertRaises(HTTPError) as ctx:
             send_message_to_webhook(name=self.name, url=self.url, message=self.message)
-        # then
-        self.assertEqual(ctx.exception.status_code, 404)
-        self.assertTrue(requests_mocker.called)
 
+        # then
+        self.assertTrue(pook.isdone())
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    @pook.on
     def test_raise_too_many_requests_when_received_from_api(
-        self, requests_mocker, mock_cache
+        self, _mock_cache: CacheFake
     ):
         # given
-        requests_mocker.register_uri(
-            "POST",
+        pook.post(
             self.url,
-            status_code=429,
-            json={
+            reply=429,
+            response_json={
                 "global": False,
                 "message": "You are being rate limited.",
                 "retry_after": 2000,
             },
-            headers={
+            response_headers={
                 "x-ratelimit-remaining": "5",
                 "x-ratelimit-reset-after": "60",
                 "Retry-After": "2000",
             },
         )
+
         # when/then
         with self.assertRaises(WebhookRateLimitExhausted) as ctx:
             send_message_to_webhook(name=self.name, url=self.url, message=self.message)
 
+        self.assertTrue(pook.isdone())
         self.assertTrue(ctx.exception.retry_at)
 
-    def test_too_many_requests_no_retry_value(self, requests_mocker, mock_cache):
+    @pook.on
+    def test_too_many_requests_no_retry_value(self, mock_cache: CacheFake):
         # given
-        requests_mocker.register_uri(
-            "POST",
+        pook.post(
             self.url,
-            status_code=429,
-            headers={
+            reply=429,
+            response_headers={
                 "x-ratelimit-remaining": "5",
                 "x-ratelimit-reset-after": "60",
             },
         )
+
         # when/then
         with self.assertRaises(WebhookRateLimitExhausted) as ctx:
             send_message_to_webhook(name=self.name, url=self.url, message=self.message)
 
+        self.assertTrue(pook.isdone())
         self.assertTrue(ctx.exception.retry_at)
 
-    def test_should_reraise_exception_when_not_expired(
-        self, requests_mocker, mock_cache
-    ):
+    @pook.on
+    def test_should_reraise_exception_when_not_expired(self, mock_cache: CacheFake):
         # given
         key = _make_key_retry_at(self.url)
         mock_cache.set(key, now() + dt.timedelta(hours=1))
+
         # when
         with self.assertRaises(WebhookRateLimitExhausted) as ctx:
             send_message_to_webhook(name=self.name, url=self.url, message=self.message)
+
         # then
         self.assertTrue(ctx.exception.retry_at)

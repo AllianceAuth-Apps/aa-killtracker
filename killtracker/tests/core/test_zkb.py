@@ -3,13 +3,13 @@ import fnmatch
 import unittest
 from unittest.mock import patch
 
+import pook
 import requests
-import requests_mock
 
+from django.core.cache import cache
 from django.test import TestCase
 from django.utils.timezone import now
 
-from app_utils.esi_testing import BravadoOperationStub
 from app_utils.testing import CacheFake, NoSocketsTestCase
 
 from killtracker.core import zkb
@@ -21,256 +21,277 @@ from killtracker.core.zkb import (
     fetch_killmail_from_api,
 )
 from killtracker.tests import CacheStub
-from killtracker.tests.testdata.factories import KillmailFactory
-from killtracker.tests.testdata.helpers import killmails_data, load_killmail, r2z2_data
+from killtracker.tests.testdata.factories import (
+    EveEntityAllianceFactory,
+    EveEntityCharacterFactory,
+    EveEntityCorporationFactory,
+    EveEntityFactionFactory,
+    EveEntityInventoryTypeFactory,
+    EveEntitySolarSystemFactory,
+    KillmailAttackerFactory,
+    KillmailFactory,
+    KillmailVictimFactory,
+    R2Z2ResponseFactory,
+    TrackerFactory,
+)
 
 MODULE_PATH = "killtracker.core.zkb"
 unittest.util._MAX_LENGTH = 1000
-requests_mock.mock.case_sensitive = True
+
+
+class CacheFake2(CacheFake):
+    def delete_pattern(self, pattern: str, itersize=None) -> None:
+        keys = []
+        for k in self._cache:
+            if fnmatch.fnmatch(k, pattern):
+                keys.append(k)
+        for k in keys:
+            self.delete(k)
+        return len(keys)
 
 
 @patch(MODULE_PATH + ".cache", new_callable=CacheFake)
-@requests_mock.Mocker()
-class TestFetchKillmailFromR2Z2(NoSocketsTestCase):
-    def test_should_return_killmail_from_scratch(self, mock_cache, requests_mocker):
+class TestFetchKillmailFromR2Z2(TestCase):
+    @pook.on
+    def test_should_return_killmail_from_scratch(self, mock_cache: CacheFake):
         # given
-        requests_mocker.register_uri(
-            "GET",
+        sequence_id = 12345
+        pook.get(
             "https://r2z2.zkillboard.com/ephemeral/sequence.json",
-            status_code=200,
-            json={"sequence": 12345},
+            reply=200,
+            response_json={"sequence": sequence_id},
         )
-        killmails = r2z2_data()
-        requests_mocker.register_uri(
-            "GET",
-            "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=200,
-            json=killmails[10000001],
+        km_1 = KillmailFactory()
+        pook.get(
+            f"https://r2z2.zkillboard.com/ephemeral/{sequence_id}.json",
+            reply=200,
+            response_json=R2Z2ResponseFactory(killmail=km_1, sequence_id=sequence_id),
         )
+
         # when
-        killmail = zkb.fetch_killmail_from_r2z2()
+        km_2 = zkb.fetch_killmail_from_r2z2()
+
         # then
-        self.assertIsNotNone(killmail)
-        self.assertEqual(killmail.id, 10000001)
-        self.assertEqual(killmail.solar_system_id, 30004984)
-        self.assertEqual(killmail.moon_id, 40000001)
-        self.assertEqual(killmail.war_id, 666)
-        self.assertAlmostEqual(killmail.time, now(), delta=dt.timedelta(seconds=120))
-        self.assertEqual(killmail.victim.alliance_id, 3011)
-        self.assertEqual(killmail.victim.character_id, 1011)
-        self.assertEqual(killmail.victim.corporation_id, 2011)
-        self.assertEqual(killmail.victim.damage_taken, 434)
-        self.assertEqual(killmail.victim.ship_type_id, 603)
-        self.assertEqual(len(killmail.attackers), 3)
+        self.assertEqual(km_2.attackers, km_1.attackers)
+        self.assertEqual(km_2.position, km_1.position)
+        self.assertEqual(km_2.solar_system_id, km_1.solar_system_id)
+        self.assertEqual(km_2.time, km_1.time)
+        self.assertEqual(km_2.victim, km_1.victim)
+        self.assertEqual(km_2.zkb, km_1.zkb)
+        self.assertEqual(km_2, km_1)
 
-        attacker_1 = killmail.attackers[0]
-        self.assertEqual(attacker_1.alliance_id, 3001)
-        self.assertEqual(attacker_1.character_id, 1001)
-        self.assertEqual(attacker_1.corporation_id, 2001)
-        self.assertEqual(attacker_1.damage_done, 434)
-        self.assertEqual(attacker_1.security_status, -10)
-        self.assertEqual(attacker_1.ship_type_id, 34562)
-        self.assertEqual(attacker_1.weapon_type_id, 2977)
-
-        self.assertEqual(killmail.zkb.location_id, 50012306)
-        self.assertEqual(killmail.zkb.fitted_value, 10000)
-        self.assertEqual(killmail.zkb.total_value, 10000)
-        self.assertEqual(killmail.zkb.points, 1)
-        self.assertFalse(killmail.zkb.is_npc)
-        self.assertFalse(killmail.zkb.is_solo)
-        self.assertFalse(killmail.zkb.is_awox)
-
-    def test_should_return_next_killmail(self, mock_cache, requests_mocker):
+    @pook.on
+    def test_should_return_next_killmail(self, mock_cache: CacheFake):
         # given
-        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
-        requests_mocker.register_uri(
-            "GET",
-            "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=200,
-            json=r2z2_data()[10000001],
+        sequence_id = 12345
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, sequence_id)
+        km_1 = KillmailFactory()
+        pook.get(
+            f"https://r2z2.zkillboard.com/ephemeral/{sequence_id}.json",
+            reply=200,
+            response_json=R2Z2ResponseFactory(killmail=km_1, sequence_id=sequence_id),
         )
+
         # when
-        killmail = zkb.fetch_killmail_from_r2z2()
+        km_2 = zkb.fetch_killmail_from_r2z2()
+
         # then
-        self.assertEqual(killmail.id, 10000001)
+        self.assertEqual(km_2.id, km_1.id)
 
-    def test_should_return_none_when_api_returns_404(self, mock_cache, requests_mocker):
+    @pook.on
+    def test_should_return_none_when_api_returns_404(self, mock_cache: CacheFake):
         # given
-        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
-        requests_mocker.register_uri(
-            "GET",
-            "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=404,
-            json={},
+        sequence_id = 12345
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, sequence_id)
+        pook.get(
+            f"https://r2z2.zkillboard.com/ephemeral/{sequence_id}.json",
+            reply=404,
+            response_json={},
         )
+
         # when
         killmail = zkb.fetch_killmail_from_r2z2()
+
         # then
         self.assertIsNone(killmail)
 
-    def test_should_ignore_invalid_value_for_retry_at_key(
-        self, mock_cache, requests_mocker
-    ):
+    @pook.on
+    def test_should_ignore_invalid_value_for_retry_at_key(self, mock_cache: CacheFake):
         # given
         mock_cache.set(zkb._KEY_RETRY_AT, "abc")
         mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
-        requests_mocker.register_uri(
-            "GET",
+        pook.get(
             "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=404,
-            json={},
+            reply=404,
+            response_json={},
         )
         # when
         killmail = zkb.fetch_killmail_from_r2z2()
         # then
         self.assertIsNone(killmail)
 
+    @pook.on
     def test_should_ignore_invalid_value_for_last_request_key(
-        self, mock_cache, requests_mocker
+        self, mock_cache: CacheFake
     ):
         # given
         mock_cache.set(zkb._KEY_LAST_REQUEST, "abc")
         mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
-        requests_mocker.register_uri(
-            "GET",
+        pook.get(
             "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=404,
-            json={},
+            reply=404,
+            response_json={},
         )
         # when
         killmail = zkb.fetch_killmail_from_r2z2()
         # then
         self.assertIsNone(killmail)
 
-    def test_should_raise_error_when_unexpected_http_error(
-        self, mock_cache, requests_mocker
-    ):
+    @pook.on
+    def test_should_raise_error_when_unexpected_http_error(self, mock_cache: CacheFake):
         # given
         mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
-        requests_mocker.register_uri(
-            "GET",
+        pook.get(
             "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=500,
-            json={},
+            reply=500,
+            response_json={},
         )
         # when
         with self.assertRaises(requests.exceptions.HTTPError):
             zkb.fetch_killmail_from_r2z2()
 
-    def test_should_raise_too_many_requests_error(self, mock_cache, requests_mocker):
+    @pook.on
+    def test_should_raise_too_many_requests_error(self, mock_cache: CacheFake):
         # given
         mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
-        requests_mocker.register_uri(
-            "GET",
+        pook.get(
             "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=429,
-            json={},
+            reply=429,
+            response_json={},
         )
         # when/then
         with self.assertRaises(zkb.R2Z2TooManyRequestsError):
             zkb.fetch_killmail_from_r2z2()
 
+    @pook.on
     def test_should_reraise_too_many_requests_error_when_ongoing(
-        self, mock_cache, requests_mocker
+        self, mock_cache: CacheFake
     ):
         # given
         retry_at = now() + dt.timedelta(hours=3)
         mock_cache.set(zkb._KEY_RETRY_AT, retry_at)
         mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
-        requests_mocker.register_uri(
-            "GET",
+        pook.get(
             "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=500,
-            json={},
+            reply=500,
+            response_json={},
         )
+
         # when/then
-        self.assertEqual(requests_mocker.call_count, 0)
+        self.assertFalse(pook.isdone())
         with self.assertRaises(zkb.R2Z2TooManyRequestsError) as ex:
             zkb.fetch_killmail_from_r2z2()
+
         self.assertEqual(retry_at, ex.exception.retry_at)
 
+    @pook.on
     def test_should_raise_error_when_api_does_not_return_json(
-        self, mock_cache, requests_mocker
+        self, mock_cache: CacheFake
     ):
         # given
         mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
-        requests_mocker.register_uri(
-            "GET",
+        pook.get(
             "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=200,
-            text="this is not JSON",
+            reply=200,
+            response_body="this is not JSON",
         )
         # when
         with self.assertRaises(requests.exceptions.JSONDecodeError):
             zkb.fetch_killmail_from_r2z2()
 
-    def test_should_wait_until_next_slot_if_needed(self, mock_cache, requests_mocker):
+    @pook.on
+    def test_should_wait_until_next_slot_if_needed(self, mock_cache: CacheFake):
         # given
-        mock_cache.set(zkb._KEY_LAST_REQUEST, now())
-        mock_cache.set(zkb._KEY_LAST_SEQUENCE, 12345)
-        requests_mocker.register_uri(
-            "GET",
-            "https://r2z2.zkillboard.com/ephemeral/12345.json",
-            status_code=200,
-            json=r2z2_data()[10000001],
+        sequence_id = 12345
+        mock_cache.set(zkb._KEY_LAST_REQUEST, now() + dt.timedelta(seconds=1))
+        mock_cache.set(zkb._KEY_LAST_SEQUENCE, sequence_id)
+        km_1 = KillmailFactory()
+        pook.get(
+            f"https://r2z2.zkillboard.com/ephemeral/{sequence_id}.json",
+            reply=200,
+            response_json=R2Z2ResponseFactory(killmail=km_1, sequence_id=sequence_id),
         )
         # when
         with patch(MODULE_PATH + ".sleep") as mock_sleep:
-            killmail = zkb.fetch_killmail_from_r2z2()
+            km_2 = zkb.fetch_killmail_from_r2z2()
             # then
-            self.assertEqual(killmail.id, 10000001)
+            self.assertEqual(km_2.id, km_1.id)
             self.assertTrue(mock_sleep.called)
 
 
-class TestKillmailSerialization(NoSocketsTestCase):
-    def test_dict_serialization(self):
-        killmail = load_killmail(10000001)
-        dct_1 = killmail.asdict()
-        killmail_2 = Killmail.from_dict(dct_1)
-        self.maxDiff = None
-        self.assertEqual(killmail, killmail_2)
-
-    def test_json_serialization(self):
-        killmail = load_killmail(10000001)
-        json_1 = killmail.asjson()
-        killmail_2 = Killmail.from_json(json_1)
-        self.maxDiff = None
-        self.assertEqual(killmail, killmail_2)
-
-
-class TestKillmailBasics(NoSocketsTestCase):
+class TestKillmail_Basics(NoSocketsTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.killmail = load_killmail(10000001)
+        character_1001 = EveEntityCharacterFactory(id=1001)
+        character_1002 = EveEntityCharacterFactory(id=1002)
+        character_1003 = EveEntityCharacterFactory(id=1003)
+        character_1011 = EveEntityCharacterFactory(id=1011)
+        alliance_3001 = EveEntityAllianceFactory(id=3001)
+        alliance_3011 = EveEntityAllianceFactory(id=3011)
+        corporation_2001 = EveEntityCorporationFactory(id=2001)
+        corporation_2011 = EveEntityCorporationFactory(id=2011)
+        faction_1 = EveEntityFactionFactory(id=500001)
+        faction_2 = EveEntityFactionFactory(id=500004)
+        ship_type_1 = EveEntityInventoryTypeFactory(id=34562)
+        ship_type_2 = EveEntityInventoryTypeFactory(id=3756)
+        ship_type_3 = EveEntityInventoryTypeFactory(id=603)
+        weapon_type_1 = EveEntityInventoryTypeFactory(id=2977)
+        weapon_type_2 = EveEntityInventoryTypeFactory(id=2488)
+
+        a1 = KillmailAttackerFactory(
+            alliance_id=alliance_3001.id,
+            character_id=character_1001.id,
+            corporation_id=corporation_2001.id,
+            faction_id=faction_1.id,
+            ship_type_id=ship_type_1.id,
+            weapon_type_id=weapon_type_1.id,
+        )
+        a2 = KillmailAttackerFactory(
+            alliance_id=alliance_3001.id,
+            character_id=character_1002.id,
+            corporation_id=corporation_2001.id,
+            faction_id=faction_1.id,
+            ship_type_id=ship_type_2.id,
+            weapon_type_id=weapon_type_2.id,
+        )
+        a3 = KillmailAttackerFactory(
+            alliance_id=alliance_3001.id,
+            character_id=character_1003.id,
+            corporation_id=corporation_2001.id,
+            faction_id=faction_1.id,
+            ship_type_id=ship_type_2.id,
+            weapon_type_id=weapon_type_2.id,
+            is_final_blow=True,
+        )
+        cls.killmail = KillmailFactory(
+            id=10000001,
+            attackers=[a1, a2, a3],
+            solar_system_id=EveEntitySolarSystemFactory(id=30004984).id,
+            victim=KillmailVictimFactory(
+                alliance_id=alliance_3011.id,
+                character_id=character_1011.id,
+                corporation_id=corporation_2011.id,
+                faction_id=faction_2.id,
+                ship_type_id=ship_type_3.id,
+            ),
+        )
 
     def test_str(self):
         self.assertEqual(str(self.killmail), "Killmail(id=10000001)")
 
     def test_repr(self):
         self.assertEqual(repr(self.killmail), "Killmail(id=10000001)")
-
-    def test_entity_ids(self):
-        result = self.killmail.entity_ids()
-        expected = {
-            1011,
-            2011,
-            3011,
-            603,
-            30004984,
-            1001,
-            1002,
-            1003,
-            2001,
-            3001,
-            34562,
-            2977,
-            3756,
-            2488,
-            500001,
-            500004,
-        }
-        self.assertSetEqual(result, expected)
 
     def test_should_return_attacker_alliance_ids(self):
         # when
@@ -310,87 +331,170 @@ class TestKillmailBasics(NoSocketsTestCase):
     def test_ships_types(self):
         self.assertSetEqual(self.killmail.ship_type_distinct_ids(), {603, 34562, 3756})
 
+    def test_entity_ids(self):
+        result = self.killmail.entity_ids()
+        expected = {
+            1011,
+            2011,
+            3011,
+            603,
+            30004984,
+            1001,
+            1002,
+            1003,
+            2001,
+            3001,
+            34562,
+            2977,
+            3756,
+            2488,
+            500001,
+            500004,
+        }
+        self.assertSetEqual(result, expected)
 
-class TestEntityCount(NoSocketsTestCase):
-    def test_is_alliance(self):
-        alliance = _EntityCount(1, _EntityCount.CATEGORY_ALLIANCE)
-        corporation = _EntityCount(2, _EntityCount.CATEGORY_CORPORATION)
 
-        self.assertTrue(alliance.is_alliance)
-        self.assertFalse(corporation.is_alliance)
+class TestKillmail_Serialization(NoSocketsTestCase):
+    def test_dict_serialization(self):
+        killmail = KillmailFactory()
+        dct_1 = killmail.asdict()
+        killmail_2 = Killmail.from_dict(dct_1)
+        self.maxDiff = None
+        self.assertEqual(killmail, killmail_2)
 
-    def test_is_corporation(self):
-        alliance = _EntityCount(1, _EntityCount.CATEGORY_ALLIANCE)
-        corporation = _EntityCount(2, _EntityCount.CATEGORY_CORPORATION)
+    def test_json_serialization(self):
+        killmail = KillmailFactory()
+        json_1 = killmail.asjson()
+        killmail_2 = Killmail.from_json(json_1)
+        self.maxDiff = None
+        self.assertEqual(killmail, killmail_2)
 
-        self.assertFalse(alliance.is_corporation)
-        self.assertTrue(corporation.is_corporation)
 
+class TestFetchKillmailFromApi(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cache.clear()
 
-@patch(MODULE_PATH + ".cache", CacheStub())
-@patch(MODULE_PATH + ".esi")
-@requests_mock.Mocker()
-class TestCreateFromZkbApi(NoSocketsTestCase):
-    def test_normal(self, mock_esi, requests_mocker):
-        killmail_id = 10000001
-        killmail_data = killmails_data()[killmail_id]
-        zkb_api_data = [
-            {"killmail_id": killmail_data["killmail_id"], "zkb": killmail_data["zkb"]}
-        ]
-        requests_mocker.register_uri(
-            "GET",
+    @patch(MODULE_PATH + ".cache", CacheStub())
+    @pook.on
+    def test_normal(self):
+        # given
+        killmail_id = 135067522
+        attacker_alliance_id = 99009567
+        attacker_character_id = 211150393
+        attacker_corporation_id = 98407493
+        attacker_security_status = 5
+        attacker_ship_type_id = 47270
+        damage_done = 78928
+        damage_taken = 78928
+        killmail_hash = "8d2a4c0779bc067e1ec5851feb086c82099cf7dc"
+        killmail_time = dt.datetime(2026, 4, 27, 18, 44, 42, 0, tzinfo=dt.timezone.utc)
+        solar_system_id = 30001980
+        victim_alliance_id = 99003581
+        victim_character_id = 2122649889
+        victim_corporation_id = 98598862
+        victim_faction_id = 500011
+        victim_ship_type_id = 24688
+        weapon_type_id = 47919
+        location_id = 50004638
+        fitted_value = 236574722.76
+        total_value = 268883360.72
+        points = 190
+        pook.get(
             f"{_ZKB_API_URL}killID/{killmail_id}/",
-            status_code=200,
-            json=zkb_api_data,
+            reply=200,
+            response_json=[
+                {
+                    "killmail_id": killmail_id,
+                    "zkb": {
+                        "locationID": location_id,
+                        "hash": killmail_hash,
+                        "fittedValue": fitted_value,
+                        "droppedValue": 52914789.03,
+                        "destroyedValue": 215968571.69,
+                        "totalValue": total_value,
+                        "points": points,
+                        "npc": False,
+                        "solo": True,
+                        "awox": False,
+                        "labels": ["tz:eu", "cat:6", "solo", "pvp", "loc:nullsec"],
+                    },
+                }
+            ],
         )
-        mock_esi.client.Killmails.get_killmails_killmail_id_killmail_hash.return_value = BravadoOperationStub(
-            killmail_data["esi"]
+        pook.get(
+            f"https://esi.evetech.net/killmails/{killmail_id}/{killmail_hash}",
+            reply=200,
+            response_json={
+                "attackers": [
+                    {
+                        "alliance_id": attacker_alliance_id,
+                        "character_id": attacker_character_id,
+                        "corporation_id": attacker_corporation_id,
+                        "damage_done": damage_done,
+                        "final_blow": True,
+                        "security_status": attacker_security_status,
+                        "ship_type_id": attacker_ship_type_id,
+                        "weapon_type_id": weapon_type_id,
+                    }
+                ],
+                "killmail_id": killmail_id,
+                "killmail_time": killmail_time.isoformat(),
+                "solar_system_id": solar_system_id,
+                "victim": {
+                    "alliance_id": victim_alliance_id,
+                    "character_id": victim_character_id,
+                    "corporation_id": victim_corporation_id,
+                    "damage_taken": damage_taken,
+                    "faction_id": victim_faction_id,
+                    "items": [],
+                    "position": {
+                        "x": 3074726066717.27,
+                        "y": 356699410448.6995,
+                        "z": -383193277301.9448,
+                    },
+                    "ship_type_id": victim_ship_type_id,
+                },
+            },
         )
 
+        # when
         killmail = fetch_killmail_from_api(killmail_id)
+
+        # then
         self.assertIsNotNone(killmail)
         self.assertEqual(killmail.id, killmail_id)
-        self.assertAlmostEqual(killmail.time, now(), delta=dt.timedelta(seconds=120))
+        self.assertEqual(killmail.time, killmail_time)
 
-        self.assertEqual(killmail.victim.alliance_id, 3011)
-        self.assertEqual(killmail.victim.character_id, 1011)
-        self.assertEqual(killmail.victim.corporation_id, 2011)
-        self.assertEqual(killmail.victim.damage_taken, 434)
-        self.assertEqual(killmail.victim.ship_type_id, 603)
+        self.assertEqual(killmail.victim.alliance_id, victim_alliance_id)
+        self.assertEqual(killmail.victim.character_id, victim_character_id)
+        self.assertEqual(killmail.victim.corporation_id, victim_corporation_id)
+        self.assertEqual(killmail.victim.damage_taken, damage_taken)
+        self.assertEqual(killmail.victim.ship_type_id, victim_ship_type_id)
 
-        self.assertEqual(len(killmail.attackers), 3)
+        self.assertEqual(len(killmail.attackers), 1)
 
         attacker_1 = killmail.attackers[0]
-        self.assertEqual(attacker_1.alliance_id, 3001)
-        self.assertEqual(attacker_1.character_id, 1001)
-        self.assertEqual(attacker_1.corporation_id, 2001)
-        self.assertEqual(attacker_1.damage_done, 434)
-        self.assertEqual(attacker_1.security_status, -10)
-        self.assertEqual(attacker_1.ship_type_id, 34562)
-        self.assertEqual(attacker_1.weapon_type_id, 2977)
+        self.assertEqual(attacker_1.alliance_id, attacker_alliance_id)
+        self.assertEqual(attacker_1.character_id, attacker_character_id)
+        self.assertEqual(attacker_1.corporation_id, attacker_corporation_id)
+        self.assertEqual(attacker_1.damage_done, damage_done)
+        self.assertEqual(attacker_1.security_status, attacker_security_status)
+        self.assertEqual(attacker_1.ship_type_id, attacker_ship_type_id)
+        self.assertEqual(attacker_1.weapon_type_id, weapon_type_id)
 
-        self.assertEqual(killmail.zkb.location_id, 50012306)
-        self.assertEqual(killmail.zkb.fitted_value, 10000)
-        self.assertEqual(killmail.zkb.total_value, 10000)
-        self.assertEqual(killmail.zkb.points, 1)
+        self.assertEqual(killmail.zkb.location_id, location_id)
+        self.assertEqual(killmail.zkb.fitted_value, fitted_value)
+        self.assertEqual(killmail.zkb.total_value, total_value)
+        self.assertEqual(killmail.zkb.points, points)
         self.assertFalse(killmail.zkb.is_npc)
-        self.assertFalse(killmail.zkb.is_solo)
+        self.assertTrue(killmail.zkb.is_solo)
         self.assertFalse(killmail.zkb.is_awox)
 
 
-class CacheFake2(CacheFake):
-    def delete_pattern(self, pattern: str, itersize=None) -> None:
-        keys = []
-        for k in self._cache:
-            if fnmatch.fnmatch(k, pattern):
-                keys.append(k)
-        for k in keys:
-            self.delete(k)
-        return len(keys)
-
-
 @patch(MODULE_PATH + ".cache", new_callable=CacheFake2)
-class TestKillmailStorage(TestCase):
+class TestKillmail_Storage(TestCase):
     def test_should_store_and_retrieve_killmail(self, mock_cache):
         # given
         killmail_1 = KillmailFactory()
@@ -443,7 +547,7 @@ class TestKillmailStorage(TestCase):
             Killmail.get(id=km2.id)
 
 
-class TestKillmailCreateFromZkbData(TestCase):
+class TestKillmail_CreateFromZkbData(TestCase):
     def test_can_create_from_complete_data(self):
         km = Killmail.create_from_zkb_data(
             42,
@@ -624,5 +728,131 @@ class TestKillmailCreateFromZkbData(TestCase):
             },
         )
         self.assertEqual(km.id, 42)
-        self.assertEqual(km.id, 42)
-        self.assertEqual(km.id, 42)
+
+
+class TestKillmail_CloneWithTrackerInfo(NoSocketsTestCase):
+    def test_can_clone_minimal(self):
+        # given
+        km_1 = KillmailFactory(attacker_count=1)
+        tracker = TrackerFactory()
+
+        # when
+        km_2 = km_1.clone_with_tracker_info(tracker_pk=tracker.pk)
+
+        # then
+        self.assertEqual(km_2.attackers, km_1.attackers)
+        self.assertEqual(km_2.position, km_1.position)
+        self.assertEqual(km_2.solar_system_id, km_1.solar_system_id)
+        self.assertEqual(km_2.time, km_1.time)
+        self.assertEqual(km_2.victim, km_1.victim)
+        self.assertEqual(km_2.zkb, km_1.zkb)
+
+        self.assertEqual(km_2.tracker_info.tracker_pk, tracker.pk)
+        self.assertIsNone(km_2.tracker_info.jumps)
+        self.assertIsNone(km_2.tracker_info.distance)
+
+    def test_can_clone_all_infos(self):
+        # given
+        km_1 = KillmailFactory(attacker_count=1)
+        tracker = TrackerFactory()
+
+        # when
+        jumps = 7
+        distance = 5.4
+        km_2 = km_1.clone_with_tracker_info(
+            tracker_pk=tracker.pk, jumps=jumps, distance=distance
+        )
+
+        # then
+        self.assertEqual(km_2.attackers, km_1.attackers)
+        self.assertEqual(km_2.position, km_1.position)
+        self.assertEqual(km_2.solar_system_id, km_1.solar_system_id)
+        self.assertEqual(km_2.time, km_1.time)
+        self.assertEqual(km_2.victim, km_1.victim)
+        self.assertEqual(km_2.zkb, km_1.zkb)
+
+        self.assertEqual(km_2.tracker_info.tracker_pk, tracker.pk)
+        self.assertEqual(km_2.tracker_info.jumps, jumps)
+        self.assertEqual(km_2.tracker_info.distance, distance)
+
+    def test_main_org_should_be_none_when_only_one_attacker(self):
+        # given
+        km_1 = KillmailFactory(attacker_count=1)
+        tracker = TrackerFactory()
+
+        # when
+        km_2 = km_1.clone_with_tracker_info(tracker_pk=tracker.pk)
+
+        # then
+        self.assertIsNone(km_2.tracker_info.main_org)
+
+    def test_main_should_set_main_org(self):
+        # given
+        alliance = EveEntityAllianceFactory()
+        km_1 = KillmailFactory(
+            attackers=[
+                KillmailAttackerFactory(alliance_id=alliance.id),
+                KillmailAttackerFactory(alliance_id=alliance.id),
+                KillmailAttackerFactory(),
+            ]
+        )
+        tracker = TrackerFactory()
+
+        # when
+        km_2 = km_1.clone_with_tracker_info(tracker_pk=tracker.pk)
+
+        # then
+        self.assertEqual(
+            km_2.tracker_info.main_org,
+            _EntityCount(
+                id=alliance.id,
+                category=_EntityCount.CATEGORY_ALLIANCE,
+                count=2,
+            ),
+        )
+
+    def test_main_org_is_none_when_faction_only(self):
+        # given
+        faction = EveEntityFactionFactory()
+        km_1 = KillmailFactory(
+            attackers=[
+                KillmailAttackerFactory(
+                    alliance_id=None, corporation_id=None, faction_id=faction.id
+                ),
+                KillmailAttackerFactory(
+                    alliance_id=None, corporation_id=None, faction_id=faction.id
+                ),
+            ]
+        )
+        tracker = TrackerFactory()
+
+        # when
+        km_2 = km_1.clone_with_tracker_info(tracker_pk=tracker.pk)
+
+        # then
+        self.assertIsNone(km_2.tracker_info.main_org)
+
+    # def test_main_ship_group_above_threshold(self, mock_calc_distances: Mock):
+    # def test_main_ship_group_return_none_if_below_threshold(
+    # def test_main_org_above_threshold(self, mock_calc_distances: Mock):
+    # def test_main_org_return_none_if_below_threshold(self, mock_calc_distances: Mock):
+    # def test_should_handle_exceptions_from_eveuniverse(self, mock_calc_distances: Mock):
+
+
+class TestEntityCount(NoSocketsTestCase):
+    def test_is_alliance(self):
+        alliance = _EntityCount(1, _EntityCount.CATEGORY_ALLIANCE)
+        corporation = _EntityCount(2, _EntityCount.CATEGORY_CORPORATION)
+
+        self.assertTrue(alliance.is_alliance)
+        self.assertFalse(corporation.is_alliance)
+
+    def test_is_corporation(self):
+        alliance = _EntityCount(1, _EntityCount.CATEGORY_ALLIANCE)
+        corporation = _EntityCount(2, _EntityCount.CATEGORY_CORPORATION)
+
+        self.assertFalse(alliance.is_corporation)
+        self.assertTrue(corporation.is_corporation)
+
+
+# ---------
