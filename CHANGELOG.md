@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## Changed
 
 - Migrated ESI client to OpenAPI
+- Removed logger tag
 
 ## Fixed
 

@@ -9,7 +9,6 @@ from django.utils.translation import gettext_lazy as _
 
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.allianceauth import get_redis_client
-from app_utils.logging import LoggerAddTag
 from app_utils.urls import static_file_absolute_url
 
 from killtracker import __title__
@@ -17,7 +16,7 @@ from killtracker.app_settings import KILLTRACKER_WEBHOOK_SET_AVATAR
 from killtracker.core.discord import DiscordMessage, send_message_to_webhook
 from killtracker.managers import WebhookManager
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 class Webhook(models.Model):

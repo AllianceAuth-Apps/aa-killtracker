@@ -3,12 +3,10 @@ import logging
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
-from app_utils.logging import LoggerAddTag
-
 from killtracker import __title__
 from killtracker.constants import EveCategoryId, EveGroupId
 
-logger = LoggerAddTag(logging.getLogger(__name__), __title__)
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):

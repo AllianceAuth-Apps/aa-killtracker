@@ -6,12 +6,10 @@ from django.db import models
 from eveuniverse.models import EveEntity
 
 from allianceauth.services.hooks import get_extension_logger
-from app_utils.logging import LoggerAddTag
 
-from killtracker import __title__
 from killtracker.managers import EveKillmailManager
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 class _EveKillmailCharacter(models.Model):

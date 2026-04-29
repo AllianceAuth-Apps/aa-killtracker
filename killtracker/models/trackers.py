@@ -23,9 +23,7 @@ from allianceauth.eveonline.models import (
     EveFactionInfo,
 )
 from allianceauth.services.hooks import get_extension_logger
-from app_utils.logging import LoggerAddTag
 
-from killtracker import __title__
 from killtracker.app_settings import KILLTRACKER_KILLMAIL_MAX_AGE_FOR_TRACKER
 from killtracker.constants import EveCategoryId, EveGroupId
 from killtracker.core.trackers import create_discord_message_from_killmail
@@ -33,7 +31,7 @@ from killtracker.core.zkb import Killmail
 from killtracker.managers import TrackerManager
 from killtracker.models.webhooks import Webhook
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 def _require_attackers_ship_groups_query():

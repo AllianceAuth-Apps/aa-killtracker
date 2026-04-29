@@ -21,7 +21,6 @@ from eveuniverse.models import EveType
 
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.json import JSONDateTimeDecoder, JSONDateTimeEncoder
-from app_utils.logging import LoggerAddTag
 
 from killtracker import USER_AGENT_TEXT, __title__
 from killtracker.app_settings import (
@@ -44,7 +43,7 @@ _ZKB_API_URL = "https://zkillboard.com/api/"
 _R2Z2_BASE_URL = "https://r2z2.zkillboard.com/ephemeral/"
 _R2Z2_SEQUENCE_TIMEOUT = 24 * 3600  # 24 hrs
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 class R2Z2TooManyRequestsError(Exception):

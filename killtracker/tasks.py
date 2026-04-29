@@ -11,7 +11,6 @@ from eveuniverse.tasks import update_unresolved_eve_entities
 
 from allianceauth.services.hooks import get_extension_logger
 from allianceauth.services.tasks import QueueOnce
-from app_utils.logging import LoggerAddTag
 
 from killtracker import __title__
 from killtracker.app_settings import (
@@ -34,7 +33,7 @@ from killtracker.core.discord import (
 )
 from killtracker.models import EveKillmail, Tracker, Webhook
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 @shared_task(bind=True, base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)

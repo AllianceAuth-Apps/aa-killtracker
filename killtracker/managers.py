@@ -11,13 +11,11 @@ from eveuniverse.models import EveEntity
 
 from allianceauth.services.hooks import get_extension_logger
 from app_utils.caching import ObjectCacheMixin
-from app_utils.logging import LoggerAddTag
 
-from killtracker import __title__
 from killtracker.app_settings import KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS
 from killtracker.core.zkb import Killmail, _KillmailCharacter
 
-logger = LoggerAddTag(get_extension_logger(__name__), __title__)
+logger = get_extension_logger(__name__)
 
 
 class EveKillmailQuerySet(models.QuerySet):
