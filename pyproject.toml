@@ -29,12 +29,12 @@ dependencies = [
     "django-esi>=8,<10",
     "dacite",
     "dhooks-lite>=1.1",
-    "django-eveuniverse>=1.6",
+    "django-eveuniverse>=1.6.1",
     "redis-simple-mq>=1.1",
 ]
 
 [project.optional-dependencies]
-test = ["coverage", "factory_boy", "pook", "django-webtest", "markdown,"]
+test = ["coverage", "factory_boy", "pook", "django-webtest"]
 
 [project.urls]
 Home = "https://gitlab.com/ErikKalkoken/aa-killtracker"

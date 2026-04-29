@@ -776,6 +776,12 @@ class Tracker(models.Model):
                 character_ownerships__character__character_id=(km.victim.character_id),
             ).exists()
 
+        if is_matching and self.exclude_victim_states.exists():
+            is_matching = not User.objects.filter(
+                profile__state__in=list(self.exclude_victim_states.all()),
+                character_ownerships__character__character_id=(km.victim.character_id),
+            ).exists()
+
         return is_matching
 
     def _match_attacker_ships(
@@ -908,4 +914,5 @@ class Tracker(models.Model):
         Returns the new queue size.
         """
         message = create_discord_message_from_killmail(self, km, intro_text)
-        return self.webhook.enqueue_message(message)
+        count = self.webhook.enqueue_message(message)
+        return count

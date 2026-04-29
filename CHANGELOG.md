@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased] - yyyy-mm-dd
 
+## [2.0.0] - TBD
+
+## Fixed
+
+- is_final_flow, is_npc, is_awox, is_solo not detected correctly from ZKB killmail
+- filter "exclude_victim_state" not working
+
 ## [1.4.1] - 2026-04-27
 
 ## Fixed

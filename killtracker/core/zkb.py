@@ -472,6 +472,7 @@ class Killmail(_KillmailBase):
     @classmethod
     def _extract_attackers(cls, killmail_data: dict) -> List[KillmailAttacker]:
         attackers = []
+        attacker_data: dict
         for attacker_data in killmail_data.get("attackers", []):
             params = {}
             for prop in KillmailAttacker.ENTITY_PROPS + [
@@ -481,7 +482,7 @@ class Killmail(_KillmailBase):
                 if prop in attacker_data:
                     params[prop] = attacker_data[prop]
 
-            if v := attacker_data["final_blow"]:
+            if v := attacker_data.get("final_blow", False):
                 params["is_final_blow"] = v
 
             attackers.append(KillmailAttacker(**params))
@@ -500,7 +501,7 @@ class Killmail(_KillmailBase):
             ("solo", "is_solo"),
             ("awox", "is_awox"),
         ):
-            if v := data.get(prop):
+            if (v := data.get(prop)) is not None:
                 if mapping:
                     params[mapping] = v
                 else:

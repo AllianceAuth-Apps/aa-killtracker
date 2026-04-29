@@ -144,7 +144,7 @@ def run_tracker(
     base=QueueOnce,
     once={"keys": ["tracker_pk", "killmail_id"], "graceful": True},
 )
-def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> None:
+def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> bool:
     """Generate and enqueue message from given killmail and start sending."""
     tracker: Tracker = Tracker.objects.get_cached(
         pk=tracker_pk,
@@ -155,7 +155,8 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
         km = zkb.Killmail.get(killmail_id)
     except zkb.KillmailDoesNotExist as exc:
         logger.error("Aborting. %s", exc)
-        return
+        return False
+
     try:
         tracker.generate_killmail_message(km)
     except Exception as exc:
@@ -175,6 +176,7 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
 
     send_messages_to_webhook.delay(webhook_pk=tracker.webhook.pk)
     logger.info("%s: Added message from killmail %s to send queue", tracker, km.id)
+    return True
 
 
 @shared_task(
@@ -182,20 +184,23 @@ def generate_killmail_message(self: Task, tracker_pk: int, killmail_id: int) -> 
     once={"keys": ["killmail_id"], "graceful": True},
     timeout=KILLTRACKER_TASKS_TIMEOUT,
 )
-def store_killmail(killmail_id: int) -> None:
-    """Stores killmail as EveKillmail object."""
+def store_killmail(killmail_id: int) -> bool:
+    """Stores a killmail as EveKillmail object and reports whether it was successful."""
     try:
         km = zkb.Killmail.get(killmail_id)
     except zkb.KillmailDoesNotExist as ex:
         logger.error("Aborting. %s", ex)
-        return
+        return False
 
     try:
         EveKillmail.objects.create_from_killmail(km, resolve_ids=False)
     except IntegrityError:
         logger.warning("%s: Failed to store killmail, because it already exists", km.id)
-    else:
-        logger.info("%s: Stored killmail", km.id)
+        # TODO: Would it not be better to overwrite existing killmails?
+        return False
+
+    logger.info("%s: Stored killmail", km.id)
+    return True
 
 
 @shared_task(base=QueueOnce, timeout=KILLTRACKER_TASKS_TIMEOUT)

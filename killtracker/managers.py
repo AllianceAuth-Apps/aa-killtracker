@@ -3,7 +3,7 @@
 # pylint: disable = missing-class-docstring
 
 from datetime import timedelta
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 from django.db import models, transaction
 from django.utils.timezone import now
@@ -35,12 +35,12 @@ class EveKillmailQuerySet(models.QuerySet):
 
 
 class EveKillmailBaseManager(models.Manager):
-    def delete_stale(self) -> Optional[Tuple[int, Dict[str, int]]]:
+    def delete_stale(self) -> Tuple[int, Dict[str, int]]:
         """deletes all stale killmail"""
         if KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS > 0:
             deadline = now() - timedelta(days=KILLTRACKER_PURGE_KILLMAILS_AFTER_DAYS)
             return self.filter(time__lt=deadline).delete()
-        return None
+        return 0, {}
 
     def create_from_killmail(self, killmail: Killmail, resolve_ids=True):
         """create a new EveKillmail from a Killmail object and returns it
