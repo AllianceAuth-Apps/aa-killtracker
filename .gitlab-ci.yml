@@ -36,7 +36,7 @@ test:
   parallel:
     matrix:
     - PYTHON_VERSION: [10, 11, 12]
-      DJANGO_VERSION: [42]
+      DJANGO_VERSION: [42, 52]
   script:
     - tox -e py3$PYTHON_VERSION-django$DJANGO_VERSION
     - bash <(curl -s https://codecov.io/bash)

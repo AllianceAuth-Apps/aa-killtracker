@@ -13,6 +13,7 @@ classifiers = [
     "Environment :: Web Environment",
     "Framework :: Django",
     "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.2",
     "Intended Audience :: End Users/Desktop",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -24,12 +25,12 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 dependencies = [
-    "allianceauth-app-utils>=1.30.1",
-    "allianceauth>=4,<5",
+    "allianceauth-app-utils>=1.31.0a1",
+    "allianceauth>=4,<6",
     "django-esi>=8,<10",
     "dacite",
     "dhooks-lite>=1.1",
-    "django-eveuniverse>=1.6.1",
+    "django-eveuniverse>=2.0.0a1",
     "redis-simple-mq>=1.1",
 ]
 

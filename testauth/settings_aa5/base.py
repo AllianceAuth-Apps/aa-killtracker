@@ -24,11 +24,11 @@ INSTALLED_APPS = [
     "django.contrib.humanize",
     "django_celery_beat",
     "solo",
-    "bootstrapform",
     "django_bootstrap5",  # https://github.com/zostera/django-bootstrap5
     "sortedm2m",
     "esi",
     "allianceauth.framework",
+    "allianceauth.admin_status",
     "allianceauth.authentication",
     "allianceauth.services",
     "allianceauth.eveonline",
@@ -57,9 +57,9 @@ CELERYBEAT_SCHEDULE = {
         "task": "esi.tasks.cleanup_callbackredirect",
         "schedule": crontab(minute="0", hour="*/4"),
     },
-    "esi_cleanup_token": {
-        "task": "esi.tasks.cleanup_token",
-        "schedule": crontab(minute="0", hour="0"),
+    "esi_cleanup_token": {  # 1/48th * 1hr = 48Hr/2Day Refresh Cycles.
+        "task": "esi.tasks.cleanup_token_subset",
+        "schedule": crontab(minute="0", hour="*"),
         "apply_offset": True,
     },
     "run_model_update": {
@@ -306,6 +306,14 @@ LOGGING = {
             "maxBytes": 1024 * 1024 * 5,  # edit this line to change max log file size
             "backupCount": 5,  # edit this line to change number of log backups
         },
+        "mumble_authenticator_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(BASE_DIR, "log/mumble_authenticator.log"),
+            "formatter": "verbose",
+            "maxBytes": 1024 * 1024 * 5,  # edit this line to change max log file size
+            "backupCount": 5,  # edit this line to change number of log backups
+        },
         "console": {
             "level": "DEBUG",  # edit this line to change logging level to console
             "class": "logging.StreamHandler",
@@ -324,6 +332,10 @@ LOGGING = {
         },
         "extensions": {
             "handlers": ["extension_file", "console"],
+            "level": "DEBUG",
+        },
+        "mumble_authenticator": {
+            "handlers": ["mumble_authenticator_file", "console"],
             "level": "DEBUG",
         },
         "django": {
