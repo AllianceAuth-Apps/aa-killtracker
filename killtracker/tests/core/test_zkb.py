@@ -424,7 +424,7 @@ class TestFetchKillmailFromApi(TestCase):
             ],
         )
         pook.get(
-            f"https://esi.evetech.net/latest/killmails/{killmail_id}/{killmail_hash}/",
+            f"https://esi.evetech.net/killmails/{killmail_id}/{killmail_hash}",
             reply=200,
             response_json={
                 "attackers": [

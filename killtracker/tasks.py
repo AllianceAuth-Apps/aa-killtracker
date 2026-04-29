@@ -6,11 +6,11 @@ from celery import Task, chain, shared_task
 
 from django.db import IntegrityError
 from django.utils.timezone import now
+from esi.decorators import rate_limit_retry_task
 from eveuniverse.tasks import update_unresolved_eve_entities
 
 from allianceauth.services.hooks import get_extension_logger
 from allianceauth.services.tasks import QueueOnce
-from app_utils.esi import retry_task_on_esi_error_and_offline
 from app_utils.logging import LoggerAddTag
 
 from killtracker import __title__
@@ -107,13 +107,13 @@ def run_killtracker(self: Task) -> int:
 
 
 @shared_task(
-    bind=True,
     max_retries=None,
     base=QueueOnce,
     once={"keys": ["tracker_pk", "killmail_id"], "graceful": True},
 )
+@rate_limit_retry_task
 def run_tracker(
-    self: Task, tracker_pk: int, killmail_id: int, ignore_max_age: bool = False
+    tracker_pk: int, killmail_id: int, ignore_max_age: bool = False
 ) -> None:
     """Run tracker for given killmail and trigger sending if needed."""
     tracker: Tracker = Tracker.objects.get_cached(
@@ -127,8 +127,7 @@ def run_tracker(
         logger.error("Aborting. %s", ex)
         return
 
-    with retry_task_on_esi_error_and_offline(self, "killtracker.tasks.run_tracker"):
-        km_2 = tracker.process_killmail(km=km, ignore_max_age=ignore_max_age)
+    km_2 = tracker.process_killmail(km=km, ignore_max_age=ignore_max_age)
 
     if km_2:
         logger.info("%s: Killmail %d matches", tracker, killmail_id)

@@ -674,12 +674,14 @@ def _fetch_killmail_from_esi(
     killmail_id: int, killmail_zkb: dict
 ) -> Optional["Killmail"]:
     """Fetch and return a Killmail from ESI."""
-    killmail: dict = esi.client.Killmails.get_killmails_killmail_id_killmail_hash(
+    killmail = esi.client.Killmails.GetKillmailsKillmailIdKillmailHash(
         killmail_id=killmail_id,
         killmail_hash=killmail_zkb["hash"],
-    ).results(ignore_cache=True)
+    ).result(use_cache=False, use_etag=False)
     if not killmail:
         logger.warning("ESI did not return any data for killmail ID %d", killmail_id)
         return None
 
-    return Killmail.create_from_zkb_data(killmail_id, killmail, killmail_zkb)
+    return Killmail.create_from_zkb_data(
+        killmail_id, killmail.model_dump(), killmail_zkb
+    )

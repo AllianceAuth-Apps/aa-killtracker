@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [2.0.0] - TBD
 
+## Changed
+
+- Migrated ESI client to OpenAPI
+
 ## Fixed
 
 - is_final_flow, is_npc, is_awox, is_solo not detected correctly from ZKB killmail
