@@ -15,7 +15,6 @@ classifiers = [
     "Framework :: Django :: 4.2",
     "Framework :: Django :: 5.2",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.10",
@@ -38,7 +37,7 @@ dependencies = [
 test = ["coverage", "factory_boy", "pook", "django-webtest"]
 
 [project.urls]
-Home = "https://gitlab.com/ErikKalkoken/aa-killtracker"
+Home = "https://github.com/AllianceAuth-Apps/aa-killtracker"
 
 [tool.flit.module]
 name = "killtracker"
