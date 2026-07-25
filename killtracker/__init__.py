@@ -3,7 +3,7 @@
 # pylint: disable = invalid-name
 default_app_config = "killtracker.apps.KillmailsConfig"
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 __title__ = "Killtracker"
 
 APP_NAME = "aa-killtracker"

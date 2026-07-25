@@ -26,7 +26,7 @@ An app for running killmail trackers with Alliance Auth and Discord.
 
 Killtracker is an app for running killmail based trackers with Alliance Auth and Discord. Trackers are small programs that automatically select killmails based on a set of pre-defined conditions and then post them to a Discord channel as soon as they appear on zKillboard.
 
-The main advantage of the Killtracker app over similar apps is it's high customizability, which allows you to cut through the noise of many false positives and only get the results you are really interested in.
+The main advantage of the Killtracker app over similar apps is its high customizability, which allows you to cut through the noise of many false positives and only get the results you are really interested in.
 
 For example you may want to know when a larger group is roaming through your area? Set up a tracker that shows all kills within 10 jumps of your staging that has more than 20 attackers. It will even ping you if you want.
 
@@ -36,7 +36,7 @@ Or you maybe want to be informed about any capitals being active within your jum
 
 - Automatically post killmails conforming with a set of conditions to a Discord channel as soon as they arrive on zKillboard
 - Use 20+ clauses to define exactly what you want to track incl. clauses for location, organization, Auth state and ship types
-- Clauses for "ship types" include ships, structures, customs offices, fighters and excavator drones
+- Clauses for "ship types" and "ship groups" include ships, structures, customs offices, fighters, excavator drones and NPC entities like named officers
 - Optional channel and group pinging for matching killmails
 - Designed for fast response times, high throughput and low resource requirements
 - Get additional insights about killmails like distance from staging
@@ -134,7 +134,8 @@ To test that your webhook works correctly you can send a test notification.
 
 Next you can create your trackers under **Tracker**. Make sure you link each tracker to the right webhook. Once you save a tracker that is **enabled** it will start working.
 
->**Hint**:<br>A common mistake is to set both attacker alliance and victim alliance to your alliance in the same tracker. This will only match awox kills though, which is usually not what you want. Instead create separate trackers to capture kills and losses for your alliance.
+> [!Hint]
+> A common mistake is to set both attacker alliance and victim alliance to your alliance in the same tracker. This will only match awox kills though, which is usually not what you want. Instead create separate trackers to capture kills and losses for your alliance.
 
 As final test that your setup is correct you may want to create a "Catch all" tracker. for that just create a new tracker without any conditions and it will forward all killmails to your Discord channel as they are received.
 
