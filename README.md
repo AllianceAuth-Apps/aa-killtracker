@@ -59,7 +59,7 @@ And here is how posted killmails look on Discord:
 
 1. Killtracker is a plugin for Alliance Auth. If you don't have Alliance Auth running already, please install it first before proceeding. (see the official [AA installation guide](https://allianceauth.readthedocs.io/en/latest/installation/auth/allianceauth/) for details)
 
-2. Killtracker needs the app [django-eveuniverse](https://gitlab.com/ErikKalkoken/django-eveuniverse) to function. Please make sure it is installed, before continuing.
+2. Killtracker needs the app [django-eveuniverse](https://github.com/AllianceAuth-Apps/django-eveuniverse) to function. Please make sure it is installed, before continuing.
 
 3. Killtracker will generate a lot of tasks. For optimal performance we recommend a threads-based configuration of your celery workers. Please see [this guide](https://aa-memberaudit.readthedocs.io/en/latest/operations.html#configuring-celery-workers) for details.
 
