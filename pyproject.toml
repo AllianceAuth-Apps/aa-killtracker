@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 [project]
 name = "aa-killtracker"
-authors = [{ name = "Erik Kalkoken", email = "kalkoken87@gmail.com" }]
+authors = [{ name = "Erik Kalkoken", email = "erik.kalkoken@gmail.com" }]
 readme = "README.md"
 dynamic = ["version", "description"]
 license = { file = "LICENSE" }
@@ -24,7 +24,7 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
 ]
 dependencies = [
-    "allianceauth-app-utils>=1.31",
+    "allianceauth-app-utils>=1.33.2",
     "allianceauth>=4,<6",
     "django-esi>=8,<10",
     "dacite",

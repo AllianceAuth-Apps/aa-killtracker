@@ -1,11 +1,19 @@
 # Change Log
 
+> [!WARNING]
+> This file has been decommissioned. Changes are now documented on the GitHub releases page.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased] - yyyy-mm-dd
+## [2.0.1] - 2026-07-11
+
+### Changed
+
+- Migrated to new home on GitHub
+- Decommissioned CHANGELOG file
 
 ## [2.0.0] - 2026-05-21
 
