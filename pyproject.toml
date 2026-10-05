@@ -26,15 +26,15 @@ classifiers = [
 dependencies = [
     "allianceauth-app-utils>=1.33.2",
     "allianceauth>=4,<6",
-    "django-esi>=8,<10",
+    "django-esi>=8,<11",
     "dacite",
     "dhooks-lite>=1.1",
-    "django-eveuniverse>=2",
+    "django-eveuniverse>=2.2",
     "redis-simple-mq>=1.1",
 ]
 
 [project.optional-dependencies]
-test = ["coverage", "factory_boy", "pook", "django-webtest"]
+test = ["coverage", "factory_boy", "pookx", "django-webtest"]
 
 [project.urls]
 Home = "https://github.com/AllianceAuth-Apps/aa-killtracker"
